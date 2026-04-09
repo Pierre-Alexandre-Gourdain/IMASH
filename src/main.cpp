@@ -72,7 +72,6 @@ int main()
         IdsNs::IDS ids;
 
         ids.open("imas:hdf5?path=/home/pag/iter/134174/117", OPEN_PULSE);
-        ids._edge_profiles.getSlice(60.0, CLOSEST_SAMPLE);
 		
         WriteEdge2D(ids, 60.0, "edge_cells_2d.dat");
         std::cout << "Wrote edge_cells_2d.dat\n";
@@ -82,6 +81,10 @@ int main()
 		
 		WriteBfield2D(ids, 60.0, "bfield.dat");
         std::cout << "Wrote bfield.dat\n";
+		
+		/*WriteWall2D(ids, 60.0, "wall_2d.dat"); //needs testing
+        std::cout << "Wrote wall_2d.dat\n"; */
+		
     }
     catch (const std::exception& ex) {
         std::cerr << "Error: " << ex.what() << "\n";

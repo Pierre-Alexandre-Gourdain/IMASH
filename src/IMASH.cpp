@@ -1,3 +1,11 @@
+#include <vector>
+#include <algorithm>
+#include <stdexcept>
+#include <iomanip>
+#include <queue>
+#include <fstream>
+#include <cmath>
+
 #include "IMASH.H"
 
 EdgeCut ExtractEdgeCut(IdsNs::IDS& ids, int subset_index)
@@ -170,7 +178,7 @@ int FindFieldEntryForSubset(const FieldArray& field, int subset_identifier_index
 
 void WriteEdge2D(IdsNs::IDS& ids, double time, const std::string& filename)
 {
-    ids._core_profiles.getSlice(time, CLOSEST_SAMPLE);
+	ids._edge_profiles.getSlice(time, CLOSEST_SAMPLE);
 	
     auto& ggd_data  = ids._edge_profiles.ggd(0);
     auto& electrons = ggd_data.electrons;
@@ -275,13 +283,6 @@ void WriteEdge2D(IdsNs::IDS& ids, double time, const std::string& filename)
     }
 }
 
-#include <vector>
-#include <algorithm>
-#include <fstream>
-#include <stdexcept>
-#include <cmath>
-#include <iomanip>
-
 double LinearInterp1D(const std::vector<double>& x,
                       const std::vector<double>& y,
                       double xq)
@@ -329,7 +330,7 @@ void WriteCore2D(IdsNs::IDS& ids,
         Te_1d.push_back(Te_arr(i));
     }
 
-    // sort by rho (safety)
+    // Sort by rho
     std::vector<std::size_t> perm(rho_1d.size());
     for (std::size_t i = 0; i < perm.size(); ++i) perm[i] = i;
 
@@ -357,16 +358,93 @@ void WriteCore2D(IdsNs::IDS& ids,
     auto& Z   = p2d.grid.dim2;
     auto& psi = p2d.psi;
 
-    double psi_axis = ts0.global_quantities.psi_axis;
-    double psi_bnd  = ts0.global_quantities.psi_boundary;
+    const int iR0 = R.lbound(0);
+    const int iR1 = R.ubound(0);
+    const int iZ0 = Z.lbound(0);
+    const int iZ1 = Z.ubound(0);
 
-    double denom = psi_bnd - psi_axis;
+    const int nR = iR1 - iR0 + 1;
+    const int nZ = iZ1 - iZ0 + 1;
+
+    const double psi_axis = ts0.global_quantities.psi_axis;
+    const double psi_bnd  = ts0.global_quantities.psi_boundary;
+
+    const double denom = psi_bnd - psi_axis;
     if (std::abs(denom) == 0.0) {
         throw std::runtime_error("psi normalization invalid");
     }
 
     // ============================================================
-    // 3. Mapping + output
+    // 3. Build rho map and candidate mask
+    // ============================================================
+    std::vector<double> rho_map(nR * nZ, -1.0);
+    std::vector<unsigned char> inside_candidate(nR * nZ, 0);
+    std::vector<unsigned char> boundary_connected(nR * nZ, 0);
+
+    auto idx = [nZ](int ii, int jj) {
+        return ii * nZ + jj;
+    };
+
+    // Small tolerance near rho=1
+    const double rho_tol = 1.0e-10;
+
+    for (int i = 0; i < nR; ++i) {
+        for (int j = 0; j < nZ; ++j) {
+            const double psi_ij = psi(i + iR0, j + iZ0);
+            const double arg = (psi_ij - psi_axis) / denom;
+
+            double rho_ij = -1.0;
+            if (arg >= 0.0) {
+                rho_ij = std::sqrt(arg);
+            }
+
+            rho_map[idx(i, j)] = rho_ij;
+
+            if (rho_ij >= 0.0 && rho_ij <= 1.0 + rho_tol) {
+                inside_candidate[idx(i, j)] = 1;
+            }
+        }
+    }
+
+    // ============================================================
+    // 4. Flood fill from boundary through candidate region
+    //    -> remove all rho<=1 regions touching the box boundary
+    // ============================================================
+    std::queue<std::pair<int,int>> q;
+
+    auto try_push = [&](int i, int j)
+    {
+        if (i < 0 || i >= nR || j < 0 || j >= nZ) return;
+        const int k = idx(i, j);
+        if (!inside_candidate[k]) return;
+        if (boundary_connected[k]) return;
+        boundary_connected[k] = 1;
+        q.push({i, j});
+    };
+
+    // Push all boundary cells
+    for (int i = 0; i < nR; ++i) {
+        try_push(i, 0);
+        try_push(i, nZ - 1);
+    }
+    for (int j = 0; j < nZ; ++j) {
+        try_push(0, j);
+        try_push(nR - 1, j);
+    }
+
+    // 4-neighbor flood fill
+    while (!q.empty()) {
+        auto [i, j] = q.front();
+        q.pop();
+
+        try_push(i - 1, j);
+        try_push(i + 1, j);
+        try_push(i, j - 1);
+        try_push(i, j + 1);
+    }
+
+    // ============================================================
+    // 5. Output
     // ============================================================
     std::ofstream out(filename);
     if (!out) {
@@ -376,35 +454,33 @@ void WriteCore2D(IdsNs::IDS& ids,
     out << std::setprecision(12);
     out << "# R Z rho ne Te\n";
 
-    for (int i = R.lbound(0); i <= R.ubound(0); ++i) {
-        for (int j = Z.lbound(0); j <= Z.ubound(0); ++j) {
-
-            double psi_ij = psi(i,j);
-            double arg = (psi_ij - psi_axis) / denom;
-
-            double rho_ij = (arg >= 0.0) ? std::sqrt(arg) : -1.0;
+    for (int i = 0; i < nR; ++i) {
+        for (int j = 0; j < nZ; ++j) {
+            const double Rv = R(i + iR0);
+            const double Zv = Z(j + iZ0);
+            const double rho_ij = rho_map[idx(i, j)];
 
             double ne_ij = 0.0;
             double Te_ij = 0.0;
 
-            if (rho_ij >= 0.0 && rho_ij <= 1.0) {
+            const bool is_candidate = inside_candidate[idx(i, j)] != 0;
+            const bool is_boundary_connected = boundary_connected[idx(i, j)] != 0;
+
+            // Keep only interior closed rho<=1 regions
+            if (is_candidate && !is_boundary_connected && rho_ij <= 1.0) {
                 ne_ij = LinearInterp1D(rho, ne, rho_ij);
                 Te_ij = LinearInterp1D(rho, Te, rho_ij);
             }
 
-            out << R(i) << " "
-                << Z(j) << " "
+            out << Rv     << " "
+                << Zv     << " "
                 << rho_ij << " "
-                << ne_ij << " "
-                << Te_ij << "\n";
+                << ne_ij  << " "
+                << Te_ij  << "\n";
         }
         out << "\n";
     }
 }
-
-#include <fstream>
-#include <cmath>
-#include <stdexcept>
 
 void WriteBfield2D(IdsNs::IDS& ids,
                    double time,
@@ -472,4 +548,102 @@ std::cout << "BT size    = " << BT << "\n";
                << Bmag << "\n";
         }
     }
+}
+
+void WriteWall2D(IdsNs::IDS& ids,
+                 double time,
+                 std::string filename)
+{
+    ids._wall.getSlice(time, PREVIOUS_SAMPLE);
+
+    std::ofstream os(filename);
+    if (!os) {
+        throw std::runtime_error("WriteWall2D: could not open output file " + filename);
+    }
+
+    os << "# type segment R Z\n";
+
+    int segment = 0;
+
+    const int ndesc = static_cast<int>(ids._wall.description_2d.size());
+
+    std::cout << "WriteWall2D: number of description_2d entries = " << ndesc << "\n";
+
+    for (int i1 = 0; i1 < ndesc; ++i1) {
+        auto& desc = ids._wall.description_2d(i1);
+
+        // ============================================================
+        // Limiter outlines
+        // ============================================================
+        const int nlim = static_cast<int>(desc.limiter.unit.size());
+        std::cout << "  description_2d(" << i1 << "): limiter units = " << nlim << "\n";
+
+        for (int i2 = 0; i2 < nlim; ++i2) {
+            auto& unit = desc.limiter.unit(i2);
+            auto& r = unit.outline.r;
+            auto& z = unit.outline.z;
+
+            const int n = static_cast<int>(r.size());
+            if (n == 0) continue;
+            if (static_cast<int>(z.size()) != n) {
+                throw std::runtime_error("WriteWall2D: limiter outline r/z size mismatch.");
+            }
+
+            for (int k = 0; k < n; ++k) {
+                os << 0 << " " << segment << " " << r(k) << " " << z(k) << "\n";
+            }
+            os << "\n";
+            ++segment;
+        }
+
+        // ============================================================
+        // Vessel annular outlines
+        // ============================================================
+        const int nves = static_cast<int>(desc.vessel.unit.size());
+        std::cout << "  description_2d(" << i1 << "): vessel units = " << nves << "\n";
+
+        for (int i2 = 0; i2 < nves; ++i2) {
+            auto& unit = desc.vessel.unit(i2);
+
+            // ----------------------------
+            // Inner outline
+            // ----------------------------
+            auto& rin = unit.annular.outline_inner.r;
+            auto& zin = unit.annular.outline_inner.z;
+
+            const int nin = static_cast<int>(rin.size());
+            if (nin > 0) {
+                if (static_cast<int>(zin.size()) != nin) {
+                    throw std::runtime_error("WriteWall2D: vessel inner outline r/z size mismatch.");
+                }
+
+                for (int k = 0; k < nin; ++k) {
+                    os << 1 << " " << segment << " " << rin(k) << " " << zin(k) << "\n";
+                }
+                os << "\n";
+                ++segment;
+            }
+
+            // ----------------------------
+            // Outer outline
+            // ----------------------------
+            auto& rout = unit.annular.outline_outer.r;
+            auto& zout = unit.annular.outline_outer.z;
+
+            const int nout = static_cast<int>(rout.size());
+            if (nout > 0) {
+                if (static_cast<int>(zout.size()) != nout) {
+                    throw std::runtime_error("WriteWall2D: vessel outer outline r/z size mismatch.");
+                }
+
+                for (int k = 0; k < nout; ++k) {
+                    os << 2 << " " << segment << " " << rout(k) << " " << zout(k) << "\n";
+                }
+                os << "\n";
+                ++segment;
+            }
+        }
+    }
+
+    std::cout << "WriteWall2D: wrote " << segment << " contour segments to " << filename << "\n";
 }

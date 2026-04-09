@@ -42,3 +42,6 @@ void WriteCore2D(IdsNs::IDS& ids,double time,const std::string& filename);
 void WriteBfield2D(IdsNs::IDS& ids,
                    double time,
                    std::string filename);
+void WriteWall2D(IdsNs::IDS& ids,
+                 double time,
+                 std::string filename);

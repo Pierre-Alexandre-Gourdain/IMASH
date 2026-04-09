@@ -67,7 +67,7 @@ RRb, ZZb = np.meshgrid(Rvals_b, Zvals_b, indexing="xy")
 
 def plot_rho1(ax):
     ax.contour(RR, ZZ, rho2, levels=[1.0],
-               colors='white', linewidths=3)
+               colors='white', linewidths=2.5)
     ax.contour(RR, ZZ, rho2, levels=[1.0],
                colors='black', linewidths=1)
 
@@ -144,7 +144,7 @@ axs[1, 2].set_ylabel("Z")
 axs[1, 2].set_aspect("equal", adjustable="box")
 
 # Add a dummy colorbar only to keep panel widths identical
-sm = mpl.cm.ScalarMappable(norm=mpl.colors.Normalize(vmin=0, vmax=1), cmap="viridis")
+sm = mpl.cm.ScalarMappable(norm=mpl.colors.Normalize(vmin=0, vmax=1), cmap="Greys")
 sm.set_array([])
 cbar = fig.colorbar(sm, ax=axs[1, 2])
 cbar.set_label("")
