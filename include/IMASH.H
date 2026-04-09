@@ -39,3 +39,6 @@ void WriteEdgeCut(const EdgeCut& cut, const std::string& filename);
 int FindSubsetIndexByName(IdsNs::IDS& ids, const std::string& name);
 void WriteEdge2D(IdsNs::IDS& ids, double time, const std::string& filename);
 void WriteCore2D(IdsNs::IDS& ids,double time,const std::string& filename);
+void WriteBfield2D(IdsNs::IDS& ids,
+                   double time,
+                   std::string filename);

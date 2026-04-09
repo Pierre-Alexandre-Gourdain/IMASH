@@ -401,3 +401,75 @@ void WriteCore2D(IdsNs::IDS& ids,
         out << "\n";
     }
 }
+
+#include <fstream>
+#include <cmath>
+#include <stdexcept>
+
+void WriteBfield2D(IdsNs::IDS& ids,
+                   double time,
+                   std::string filename)
+{
+    ids._equilibrium.getSlice(time, PREVIOUS_SAMPLE);
+    auto& ts0 = ids._equilibrium.time_slice(0);
+	const double BT = ids._equilibrium.vacuum_toroidal_field.b0(0);
+	const double R0 = ids._equilibrium.vacuum_toroidal_field.r0;
+    auto& p2d = ts0.profiles_2d(0);
+
+    auto& Rvec = p2d.grid.dim1;
+    auto& Zvec = p2d.grid.dim2;
+
+    // Replace these names if your generated IMAS-Cpp bindings differ
+    auto& BR2D   = p2d.b_field_r;
+    auto& BZ2D   = p2d.b_field_z;
+
+    const int nR = static_cast<int>(Rvec.size());
+    const int nZ = static_cast<int>(Zvec.size());
+
+    if (nR <= 0 || nZ <= 0) {
+        throw std::runtime_error("WriteBfield2D: empty equilibrium grid.");
+    }
+auto& psi2D = p2d.psi;
+
+std::cout << "nR = " << Rvec.size() << "\n";
+std::cout << "nZ = " << Zvec.size() << "\n";
+std::cout << "nR*nZ = " << Rvec.size() * Zvec.size() << "\n";
+std::cout << "psi size   = " << psi2D.size() << "\n";
+std::cout << "BR size    = " << BR2D.size() << "\n";
+std::cout << "BZ size    = " << BZ2D.size() << "\n";
+std::cout << "BT size    = " << BT << "\n";
+
+    if (static_cast<int>(BR2D.size())   != nR * nZ ||
+	static_cast<int>(BZ2D.size())   != nR * nZ){
+        throw std::runtime_error("WriteBfield2D: inconsistent magnetic field array sizes.");
+    }
+
+    std::ofstream os(filename);
+    if (!os) {
+        throw std::runtime_error("WriteBfield2D: could not open output file " + filename);
+    }
+
+    os << "# R Z BR BZ Bphi Bpol Bmag\n";
+
+    for (int i = 0; i < nR; ++i) {
+        for (int j = 0; j < nZ; ++j) {
+			const int k = j * nR + i;
+            const double R    = Rvec(i);
+            const double Z    = Zvec(j);
+            const double BR   = BR2D(k);
+            const double BZ   = BZ2D(k);
+            const double Bphi = BT*R0/R;
+
+            const double Bpol = std::sqrt(BR*BR + BZ*BZ);
+            const double Bmag = std::sqrt(BR*BR + BZ*BZ + Bphi*Bphi);
+
+            os << R    << " "
+               << Z    << " "
+               << BR   << " "
+               << BZ   << " "
+               << Bphi << " "
+               << Bpol << " "
+               << Bmag << "\n";
+        }
+    }
+}

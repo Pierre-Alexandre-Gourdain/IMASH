@@ -78,8 +78,10 @@ int main()
         std::cout << "Wrote edge_cells_2d.dat\n";
 		
         WriteCore2D(ids, 60.0,"core_on_equilibrium_grid.dat");
-
         std::cout << "Wrote core_on_equilibrium_grid.dat\n";
+		
+		WriteBfield2D(ids, 60.0, "bfield.dat");
+        std::cout << "Wrote bfield.dat\n";
     }
     catch (const std::exception& ex) {
         std::cerr << "Error: " << ex.what() << "\n";
