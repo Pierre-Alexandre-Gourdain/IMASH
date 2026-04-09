@@ -67,9 +67,9 @@ RRb, ZZb = np.meshgrid(Rvals_b, Zvals_b, indexing="xy")
 
 def plot_rho1(ax):
     ax.contour(RR, ZZ, rho2, levels=[1.0],
-               colors='white', linewidths=2)
+               colors='white', linewidths=3)
     ax.contour(RR, ZZ, rho2, levels=[1.0],
-               colors='black', linewidths=0.5)
+               colors='black', linewidths=1)
 
 # ============================================================
 # Make combined figure
@@ -81,7 +81,7 @@ fig, axs = plt.subplots(2, 3, figsize=(16, 10), constrained_layout=True)
 # ------------------------------------------------------------
 pcm0 = axs[0, 0].pcolormesh(RR, ZZ, ne_c2, shading="auto")
 plot_rho1(axs[0, 0])
-fig.colorbar(pcm0, ax=axs[0, 0], label="ne")
+fig.colorbar(pcm0, ax=axs[0, 0], label="$n_e ( m^{-3} )$")
 axs[0, 0].set_title("Core density")
 axs[0, 0].set_xlabel("R")
 axs[0, 0].set_ylabel("Z")
@@ -90,9 +90,9 @@ axs[0, 0].set_aspect("equal", adjustable="box")
 # ------------------------------------------------------------
 # Core Te
 # ------------------------------------------------------------
-pcm1 = axs[0, 1].pcolormesh(RR, ZZ, Te_c2, shading="auto")
+pcm1 = axs[0, 1].pcolormesh(RR, ZZ, Te_c2*1e-3, shading="auto")
 plot_rho1(axs[0, 1])
-fig.colorbar(pcm1, ax=axs[0, 1], label="Te")
+fig.colorbar(pcm1, ax=axs[0, 1], label="$T_e (keV)$")
 axs[0, 1].set_title("Core temperature")
 axs[0, 1].set_xlabel("R")
 axs[0, 1].set_ylabel("Z")
@@ -103,7 +103,7 @@ axs[0, 1].set_aspect("equal", adjustable="box")
 # ------------------------------------------------------------
 pcm2 = axs[0, 2].pcolormesh(RRb, ZZb, Bpol2, shading="auto")
 plot_rho1(axs[0, 2])
-fig.colorbar(pcm2, ax=axs[0, 2], label="Bpol")
+fig.colorbar(pcm2, ax=axs[0, 2], label="$B_{pol} (T)$")
 axs[0, 2].set_title("Poloidal magnetic field magnitude")
 axs[0, 2].set_xlabel("R")
 axs[0, 2].set_ylabel("Z")
@@ -114,7 +114,7 @@ axs[0, 2].set_aspect("equal", adjustable="box")
 # ------------------------------------------------------------
 tpc0 = axs[1, 0].tricontourf(tri, ne_e, levels=50)
 plot_rho1(axs[1, 0])
-fig.colorbar(tpc0, ax=axs[1, 0], label="ne")
+fig.colorbar(tpc0, ax=axs[1, 0], label="$n_e ( m^{-3} )$")
 axs[1, 0].set_title("Edge density")
 axs[1, 0].set_xlabel("R")
 axs[1, 0].set_ylabel("Z")
@@ -125,7 +125,7 @@ axs[1, 0].set_aspect("equal", adjustable="box")
 # ------------------------------------------------------------
 tpc1 = axs[1, 1].tricontourf(tri, Te_e, levels=50)
 plot_rho1(axs[1, 1])
-fig.colorbar(tpc1, ax=axs[1, 1], label="Te")
+fig.colorbar(tpc1, ax=axs[1, 1], label="$T_e (eV)$")
 axs[1, 1].set_title("Edge temperature")
 axs[1, 1].set_xlabel("R")
 axs[1, 1].set_ylabel("Z")
