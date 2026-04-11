@@ -45,3 +45,6 @@ void WriteBfield2D(IdsNs::IDS& ids,
 void WriteWall2D(IdsNs::IDS& ids,
                  double time,
                  std::string filename);
+void WriteMagneticAxis(IdsNs::IDS& ids,
+                       double time,
+                       const std::string& filename);

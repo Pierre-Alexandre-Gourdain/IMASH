@@ -82,6 +82,8 @@ int main()
 		WriteBfield2D(ids, 60.0, "bfield.dat");
         std::cout << "Wrote bfield.dat\n";
 		
+		WriteMagneticAxis(ids, 60.0, "magnetic_axis.dat");
+		
 		/*WriteWall2D(ids, 60.0, "wall_2d.dat"); //needs testing
         std::cout << "Wrote wall_2d.dat\n"; */
 		

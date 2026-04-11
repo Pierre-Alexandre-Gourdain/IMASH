@@ -647,3 +647,23 @@ void WriteWall2D(IdsNs::IDS& ids,
 
     std::cout << "WriteWall2D: wrote " << segment << " contour segments to " << filename << "\n";
 }
+
+void WriteMagneticAxis(IdsNs::IDS& ids,
+                       double time,
+                       const std::string& filename)
+{
+    ids._equilibrium.getSlice(time, PREVIOUS_SAMPLE);
+    auto& ts0 = ids._equilibrium.time_slice(0);
+
+    // Adjust these names if your IMAS-Cpp bindings differ
+    const double R_axis = ts0.global_quantities.magnetic_axis.r;
+    const double Z_axis = ts0.global_quantities.magnetic_axis.z;
+
+    std::ofstream os(filename);
+    if (!os) {
+        throw std::runtime_error("WriteMagneticAxis: could not open output file " + filename);
+    }
+
+    os << std::setprecision(12);
+    os << R_axis << " " << Z_axis << "\n";
+}
