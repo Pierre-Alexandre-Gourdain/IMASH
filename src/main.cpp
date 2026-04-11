@@ -82,7 +82,7 @@ int main()
 		WriteBfield2D(ids, 60.0, "bfield.dat");
         std::cout << "Wrote bfield.dat\n";
 		
-		WriteEdgeOnGridRhoTheta(ids, 60.0, "edge_cells_2d_interpolated.dat",.2);
+		WriteEdgeOnGridRhoTheta(ids, 60.0, "edge_cells_2d_interpolated.dat",.01);
         std::cout << "Wrote edge_cells_2d_interpolated.dat\n";
 		
 		/*WriteWall2D(ids, 60.0, "wall_2d.dat"); //needs testing

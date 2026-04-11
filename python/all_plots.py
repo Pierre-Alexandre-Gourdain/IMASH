@@ -1,8 +1,6 @@
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-from matplotlib.tri import Triangulation
-from scipy.interpolate import griddata
 
 # ============================================================
 # Helpers
@@ -38,21 +36,27 @@ Te_c2 = Te_c.reshape(nR, nZ).T
 RR, ZZ = np.meshgrid(Rvals, Zvals, indexing="xy")
 
 # ============================================================
-# Load edge data
+# Load interpolated edge data
 # ============================================================
-edge = np.loadtxt("edge_cells_2d.dat", comments="#")
-Re   = edge[:, 1]
-Ze   = edge[:, 2]
-ne_e = edge[:, 3]
-Te_e = edge[:, 4]
+edge = np.loadtxt("edge_cells_2d_interpolated.dat", comments="#")
 
-tri = Triangulation(Re, Ze)
+# Expected columns:
+# R Z ne Te rho theta
+Re    = edge[:, 0]
+Ze    = edge[:, 1]
+ne_e  = edge[:, 2]
+Te_e  = edge[:, 3]
 
-# Interpolate edge data onto the equilibrium/core grid
-edge_points = np.column_stack((Re, Ze))
+Rvals_e = np.unique(Re)
+Zvals_e = np.unique(Ze)
 
-ne_e2 = griddata(edge_points, ne_e, (RR, ZZ), method="cubic")
-Te_e2 = griddata(edge_points, Te_e, (RR, ZZ), method="cubic")
+nRe = len(Rvals_e)
+nZe = len(Zvals_e)
+
+ne_e2 = ne_e.reshape(nRe, nZe).T
+Te_e2 = Te_e.reshape(nRe, nZe).T
+
+RRe, ZZe = np.meshgrid(Rvals_e, Zvals_e, indexing="xy")
 
 ne_e2 = np.nan_to_num(ne_e2, nan=0.0)
 Te_e2 = np.nan_to_num(Te_e2, nan=0.0)
@@ -61,9 +65,6 @@ ne_e2 = np.maximum(ne_e2, 0.0)
 Te_e2 = np.maximum(Te_e2, 0.0)
 
 # Total = core inside + edge outside
-# If you prefer a raw sum everywhere, replace these 4 lines by:
-# ne_T = ne_c2 + ne_e2
-# Te_T = Te_c2 + Te_e2
 ne_T = ne_c2.copy()
 Te_T = Te_c2.copy()
 
@@ -181,22 +182,22 @@ axs[0, 2].streamplot(Rvals_b, Zvals_b, BR2, BZ2, density=1.2, color="red")
 plot_rho1(axs[0, 2])
 
 # ------------------------------------------------------------
-# Edge ne
+# Interpolated edge ne
 # ------------------------------------------------------------
-tpc0 = axs[1, 0].tricontourf(tri, ne_e, levels=50)
+pcm_edge_ne = axs[1, 0].pcolormesh(RRe, ZZe, ne_e2, shading="auto")
 plot_rho1(axs[1, 0])
-fig.colorbar(tpc0, ax=axs[1, 0], label="$n_e\\,(m^{-3})$")
+fig.colorbar(pcm_edge_ne, ax=axs[1, 0], label="$n_e\\,(m^{-3})$")
 axs[1, 0].set_title("Edge density")
 axs[1, 0].set_xlabel("R")
 axs[1, 0].set_ylabel("Z")
 axs[1, 0].set_aspect("equal", adjustable="box")
 
 # ------------------------------------------------------------
-# Edge Te
+# Interpolated edge Te
 # ------------------------------------------------------------
-tpc1 = axs[1, 1].tricontourf(tri, Te_e, levels=50)
+pcm_edge_te = axs[1, 1].pcolormesh(RRe, ZZe, Te_e2, shading="auto")
 plot_rho1(axs[1, 1])
-fig.colorbar(tpc1, ax=axs[1, 1], label="$T_e\\,(eV)$")
+fig.colorbar(pcm_edge_te, ax=axs[1, 1], label="$T_e\\,(eV)$")
 axs[1, 1].set_title("Edge temperature")
 axs[1, 1].set_xlabel("R")
 axs[1, 1].set_ylabel("Z")
@@ -239,7 +240,9 @@ axs[0, 3].set_aspect("equal", adjustable="box")
 
 # ------------------------------------------------------------
 # Total density with omega_O overlay
+# Split contours into core-only and edge-only
 # ------------------------------------------------------------
+
 pcm5 = axs[1, 3].pcolormesh(
     RR, ZZ,
     np.log10(np.abs(ne_T) + np.average(ne_c2)/20.0),
@@ -247,20 +250,63 @@ pcm5 = axs[1, 3].pcolormesh(
 )
 fig.colorbar(pcm5, ax=axs[1, 3], label="$\\log_{10}n_e\\,(m^{-3})$")
 
-cO_cold = axs[1, 3].contour(
-    RR, ZZ, f_O_cold_GHz,
-    levels=levels_O, colors="blue", linewidths=1.5
-)
-cO_hot = axs[1, 3].contour(
-    RR, ZZ, f_O_hot_GHz,
-    levels=levels_O, colors="red", linewidths=1.2
-)
+mask_core = rho2 <= 1.0
+mask_edge = rho2 > 1.0
 
-axs[1, 3].clabel(cO_cold, fmt="%.1f GHz", fontsize=7, colors="blue")
-axs[1, 3].clabel(cO_hot,  fmt="%.1f GHz", fontsize=7, colors="red")
+# Masked fields
+f_O_cold_core = np.where(mask_core, f_O_cold_GHz, np.nan)
+f_O_hot_core  = np.where(mask_core, f_O_hot_GHz,  np.nan)
+
+f_O_cold_edge = np.where(mask_edge, f_O_cold_GHz, np.nan)
+f_O_hot_edge  = np.where(mask_edge, f_O_hot_GHz,  np.nan)
+
+def build_levels_masked(a, b, mask, nlev=8, pmin=10, pmax=90):
+    vals = np.concatenate([
+        a[mask & np.isfinite(a) & (a > 0.0)],
+        b[mask & np.isfinite(b) & (b > 0.0)]
+    ])
+    if vals.size == 0:
+        return None
+    vmin = np.percentile(vals, pmin)
+    vmax = np.percentile(vals, pmax)
+    if vmax <= vmin:
+        vmax = vmin + 1.0e-6
+    return np.linspace(vmin, vmax, nlev)
+
+# Separate contour levels
+levels_O_core = build_levels_masked(f_O_cold_GHz, f_O_hot_GHz, mask_core, nlev=8, pmin=10, pmax=90)
+levels_O_edge = build_levels_masked(f_O_cold_GHz, f_O_hot_GHz, mask_edge, nlev=8, pmin=10, pmax=90)
+
+# Core contours
+if levels_O_core is not None:
+    cO_cold_core = axs[1, 3].contour(
+        RR, ZZ, f_O_cold_core,
+        levels=levels_O_core, colors="blue", linewidths=1.5
+    )
+    cO_hot_core = axs[1, 3].contour(
+        RR, ZZ, f_O_hot_core,
+        levels=levels_O_core, colors="red", linewidths=1.2
+    )
+
+    axs[1, 3].clabel(cO_cold_core, fmt="%.1f GHz", fontsize=7, colors="blue")
+    axs[1, 3].clabel(cO_hot_core,  fmt="%.1f GHz", fontsize=7, colors="red")
+
+# Edge contours
+if levels_O_edge is not None:
+    cO_cold_edge = axs[1, 3].contour(
+        RR, ZZ, f_O_cold_edge,
+        levels=levels_O_edge, colors="cyan", linewidths=1.2, linestyles="--"
+    )
+    cO_hot_edge = axs[1, 3].contour(
+        RR, ZZ, f_O_hot_edge,
+        levels=levels_O_edge, colors="magenta", linewidths=1.0, linestyles="--"
+    )
+
+    axs[1, 3].clabel(cO_cold_edge, fmt="%.1f GHz", fontsize=7, colors="cyan")
+    axs[1, 3].clabel(cO_hot_edge,  fmt="%.1f GHz", fontsize=7, colors="magenta")
 
 plot_rho1(axs[1, 3])
-axs[1, 3].set_title(r"Total density with $\omega_O=\omega_{pe}$ contours")
+axs[1, 3].set_title(r"Total density with split $\omega_O=\omega_{pe}$ contours")
 axs[1, 3].set_xlabel("R")
 axs[1, 3].set_ylabel("Z")
 axs[1, 3].set_aspect("equal", adjustable="box")
