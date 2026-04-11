@@ -82,7 +82,8 @@ int main()
 		WriteBfield2D(ids, 60.0, "bfield.dat");
         std::cout << "Wrote bfield.dat\n";
 		
-		WriteMagneticAxis(ids, 60.0, "magnetic_axis.dat");
+		WriteEdgeOnGridRhoTheta(ids, 60.0, "edge_cells_2d_interpolated.dat",.2);
+        std::cout << "Wrote edge_cells_2d_interpolated.dat\n";
 		
 		/*WriteWall2D(ids, 60.0, "wall_2d.dat"); //needs testing
         std::cout << "Wrote wall_2d.dat\n"; */

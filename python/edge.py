@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.tri as mtri
-from scipy.interpolate import griddata
 
 # ============================================================
 # Helpers
@@ -29,57 +28,6 @@ def plot_rho1(ax):
     ax.contour(RR, ZZ, rho2, levels=[1.0], colors="black", linewidths=1.0)
 
 
-def wrap_angle_diff(a, b):
-    d = a - b
-    return (d + np.pi) % (2.0 * np.pi) - np.pi
-
-
-def local_interp_rho_theta(rho_q, theta_q,
-                           rho_s, theta_s, val_s,
-                           sigma_rho, sigma_theta,
-                           max_drho=None, max_dtheta=None,
-                           min_weight_sum=1.0e-12):
-    out = np.zeros_like(rho_q)
-
-    for j in range(rho_q.shape[0]):
-        for i in range(rho_q.shape[1]):
-            rq = rho_q[j, i]
-            tq = theta_q[j, i]
-
-            drho = rho_s - rq
-            dtheta = wrap_angle_diff(theta_s, tq)
-
-            if max_drho is None:
-                mask_rho = np.ones_like(drho, dtype=bool)
-            else:
-                mask_rho = np.abs(drho) <= max_drho
-
-            if max_dtheta is None:
-                mask_theta = np.ones_like(dtheta, dtype=bool)
-            else:
-                mask_theta = np.abs(dtheta) <= max_dtheta
-
-            mask = mask_rho & mask_theta
-
-            if not np.any(mask):
-                out[j, i] = 0.0
-                continue
-
-            dr = drho[mask] / sigma_rho
-            dt = dtheta[mask] / sigma_theta
-
-            d2 = dr * dr + dt * dt
-            w = np.exp(-0.5 * d2)
-
-            wsum = np.sum(w)
-            if wsum < min_weight_sum:
-                out[j, i] = 0.0
-            else:
-                out[j, i] = np.sum(w * val_s[mask]) / wsum
-
-    return out
-
-
 # ============================================================
 # Load core / equilibrium-grid data
 # ============================================================
@@ -88,198 +36,109 @@ core = np.loadtxt("core_on_equilibrium_grid.dat", comments="#")
 Rc   = core[:, 0]
 Zc   = core[:, 1]
 rho  = core[:, 2]
-ne_c = core[:, 3]
-Te_c = core[:, 4]
 
-Rvals, Zvals, RR, ZZ, rho2  = reshape_on_grid(Rc, Zc, rho)
-_,     _,     _,  _,  ne_c2 = reshape_on_grid(Rc, Zc, ne_c)
-_,     _,     _,  _,  Te_c2 = reshape_on_grid(Rc, Zc, Te_c)
+Rvals, Zvals, RR, ZZ, rho2 = reshape_on_grid(Rc, Zc, rho)
 
 # ============================================================
-# Load magnetic axis
+# Load raw edge data
 # ============================================================
 
-axis = np.loadtxt("magnetic_axis.dat")
-R0 = axis[0]
-Z0 = axis[1]
+edge_raw = np.loadtxt("edge_cells_2d.dat", comments="#")
+Re_raw   = edge_raw[:, 1]
+Ze_raw   = edge_raw[:, 2]
+ne_raw   = edge_raw[:, 3]
+Te_raw   = edge_raw[:, 4]
 
-print("Magnetic axis =", R0, Z0)
-
-theta2 = np.arctan2(ZZ - Z0, RR - R0)
-
-# ============================================================
-# Load raw edge points
-# ============================================================
-
-edge = np.loadtxt("edge_cells_2d.dat", comments="#")
-Re   = edge[:, 1]
-Ze   = edge[:, 2]
-ne_e = edge[:, 3]
-Te_e = edge[:, 4]
+tri_raw = mtri.Triangulation(Re_raw, Ze_raw)
 
 # ============================================================
-# Interpolate rho from equilibrium grid to edge points
+# Load interpolated edge data (C++ output)
 # ============================================================
 
-eq_points = np.column_stack((Rc, Zc))
-rho_e = griddata(eq_points, rho, (Re, Ze), method="linear")
+edge_int = np.loadtxt("edge_cells_2d_interpolated.dat", comments="#")
 
-good = np.isfinite(rho_e)
-Re   = Re[good]
-Ze   = Ze[good]
-ne_e = ne_e[good]
-Te_e = Te_e[good]
-rho_e = rho_e[good]
+Ri_int     = edge_int[:, 0]
+Zi_int     = edge_int[:, 1]
+ne_int     = edge_int[:, 2]
+Te_int     = edge_int[:, 3]
+rho_int    = edge_int[:, 4]
+theta_int  = edge_int[:, 5]
 
-theta_e = np.arctan2(Ze - Z0, Re - R0)
+Rvals_i, Zvals_i, RRi, ZZi, ne_i2 = reshape_on_grid(Ri_int, Zi_int, ne_int)
+_,       _,       _,   _,   Te_i2 = reshape_on_grid(Ri_int, Zi_int, Te_int)
+_,       _,       _,   _,   rho_i2 = reshape_on_grid(Ri_int, Zi_int, rho_int)
+_,       _,       _,   _,   theta_i2 = reshape_on_grid(Ri_int, Zi_int, theta_int)
 
-tri = mtri.Triangulation(Re, Ze)
-
-# ============================================================
-# Local interpolation in (rho, theta)
-# ============================================================
-
-sigma_rho   = 0.0025
-sigma_theta = 0.1
-
-max_drho   = 3.0 * sigma_rho
-max_dtheta = 3.0 * sigma_theta
-
-ne_e2 = local_interp_rho_theta(
-    rho2, theta2,
-    rho_e, theta_e, ne_e,
-    sigma_rho=sigma_rho,
-    sigma_theta=sigma_theta,
-    max_drho=max_drho,
-    max_dtheta=max_dtheta
-)
-
-Te_e2 = local_interp_rho_theta(
-    rho2, theta2,
-    rho_e, theta_e, Te_e,
-    sigma_rho=sigma_rho,
-    sigma_theta=sigma_theta,
-    max_drho=max_drho,
-    max_dtheta=max_dtheta
-)
-
-outside_sep = rho2 > 1.0
-ne_e2[~outside_sep] = 0.0
-Te_e2[~outside_sep] = 0.0
-
-ne_e2 = np.nan_to_num(ne_e2, nan=0.0)
-Te_e2 = np.nan_to_num(Te_e2, nan=0.0)
-
-ne_e2 = np.maximum(ne_e2, 0.0)
-Te_e2 = np.maximum(Te_e2, 0.0)
-
-# ============================================================
-# Merge: core inside, edge outside
-# ============================================================
-
-ne_T = ne_c2.copy()
-Te_T = Te_c2.copy()
-
-ne_T[outside_sep] = ne_e2[outside_sep]
-Te_T[outside_sep] = Te_e2[outside_sep]
+ne_i2 = np.maximum(np.nan_to_num(ne_i2, nan=0.0), 0.0)
+Te_i2 = np.maximum(np.nan_to_num(Te_i2, nan=0.0), 0.0)
 
 # ============================================================
 # Diagnostics
 # ============================================================
 
-print("edge rho min/max =", np.nanmin(rho_e), np.nanmax(rho_e))
-print("edge theta min/max =", np.nanmin(theta_e), np.nanmax(theta_e))
-print("edge ne min/max =", np.nanmin(ne_e2), np.nanmax(ne_e2))
-print("edge Te min/max =", np.nanmin(Te_e2), np.nanmax(Te_e2))
-print("Max edge density inside core:", np.max(ne_e2[rho2 <= 1.0]))
-print("Max edge density outside core:", np.max(ne_e2[rho2 > 1.0]))
-print("Max edge temperature inside core:", np.max(Te_e2[rho2 <= 1.0]))
-print("Max edge temperature outside core:", np.max(Te_e2[rho2 > 1.0]))
+print("Raw edge ne min/max =", np.nanmin(ne_raw), np.nanmax(ne_raw))
+print("Raw edge Te min/max =", np.nanmin(Te_raw), np.nanmax(Te_raw))
+print("Interpolated ne min/max =", np.nanmin(ne_i2), np.nanmax(ne_i2))
+print("Interpolated Te min/max =", np.nanmin(Te_i2), np.nanmax(Te_i2))
 
 # ============================================================
 # Plots
 # ============================================================
 
-fig, axs = plt.subplots(2, 4, figsize=(15, 10), constrained_layout=True)
+fig, axs = plt.subplots(2, 3, figsize=(12, 10), constrained_layout=True)
 
 # ------------------------------------------------------------
-# Row 1: density
+# Column 1: rho / theta
+# ------------------------------------------------------------
+
+# rho
+pcm0 = axs[0, 0].pcolormesh(RRi, ZZi, rho_i2, shading="auto")
+plot_rho1(axs[0, 0])
+fig.colorbar(pcm0, ax=axs[0, 0], label="$\\rho$")
+axs[0, 0].set_title("Normalized $\\rho$")
+
+# theta
+pcm1 = axs[1, 0].pcolormesh(RRi, ZZi, theta_i2, shading="auto")
+plot_rho1(axs[1, 0])
+fig.colorbar(pcm1, ax=axs[1, 0], label="$\\theta$ (rd)")
+axs[1, 0].set_title("$\\theta$")
+
+# ------------------------------------------------------------
+# Column 2: density
 # ------------------------------------------------------------
 
 # Raw edge ne
-tpc0 = axs[0, 0].tricontourf(tri, np.log10(ne_e + 1.0e14), levels=50)
-plot_rho1(axs[0, 0])
-fig.colorbar(tpc0, ax=axs[0, 0], label=r"$\log_{10} n_{e,\mathrm{raw}}$ (m$^{-3}$)")
-axs[0, 0].set_title("Raw edge density")
-axs[0, 0].set_xlabel("R")
-axs[0, 0].set_ylabel("Z")
-axs[0, 0].set_aspect("equal")
+tpc0 = axs[0, 1].tricontourf(tri_raw, np.log10(ne_raw + 1.0e14), levels=50)
+plot_rho1(axs[0, 1])
+fig.colorbar(tpc0, ax=axs[0, 1], label="$\\log_{10}n_e\\,(m^{-3})$")
+axs[0, 1].set_title("Raw edge density\n(ignore core values)")
 
 # Interpolated edge ne
-pcm0 = axs[0, 1].pcolormesh(RR, ZZ, np.log10(ne_e2 + 1.0e14), shading="auto")
-plot_rho1(axs[0, 1])
-fig.colorbar(pcm0, ax=axs[0, 1], label=r"$\log_{10} n_{e,\mathrm{interp}}$ (m$^{-3}$)")
-axs[0, 1].set_title("Interpolated edge density")
-axs[0, 1].set_xlabel("R")
-axs[0, 1].set_ylabel("Z")
-axs[0, 1].set_aspect("equal")
-
-# Total ne
-pcm1 = axs[0, 2].pcolormesh(RR, ZZ, np.log10(ne_T + 1.0e14), shading="auto")
-plot_rho1(axs[0, 2])
-fig.colorbar(pcm1, ax=axs[0, 2], label=r"$\log_{10} n_e$ (m$^{-3}$)")
-axs[0, 2].set_title("Total density")
-axs[0, 2].set_xlabel("R")
-axs[0, 2].set_ylabel("Z")
-axs[0, 2].set_aspect("equal")
-
-# theta
-pcm2 = axs[0, 3].pcolormesh(RR, ZZ, theta2, shading="auto")
-plot_rho1(axs[0, 3])
-fig.colorbar(pcm2, ax=axs[0, 3], label=r"$\theta$")
-axs[0, 3].set_title("Poloidal angle")
-axs[0, 3].set_xlabel("R")
-axs[0, 3].set_ylabel("Z")
-axs[0, 3].set_aspect("equal")
+pcm2 = axs[1, 1].pcolormesh(RRi, ZZi, np.log10(ne_i2 + 1.0e14), shading="auto")
+plot_rho1(axs[1, 1])
+fig.colorbar(pcm2, ax=axs[1, 1], label="$\\log_{10}n_e\\,(m^{-3})$")
+axs[1, 1].set_title("Interpolated edge density")
 
 # ------------------------------------------------------------
-# Row 2: temperature
+# Column 3: temperature
 # ------------------------------------------------------------
 
 # Raw edge Te
-tpc1 = axs[1, 0].tricontourf(tri, Te_e, levels=50)
-plot_rho1(axs[1, 0])
-fig.colorbar(tpc1, ax=axs[1, 0], label=r"$T_{e,\mathrm{raw}}\;(\mathrm{eV})$")
-axs[1, 0].set_title("Raw edge temperature")
-axs[1, 0].set_xlabel("R")
-axs[1, 0].set_ylabel("Z")
-axs[1, 0].set_aspect("equal")
+tpc1 = axs[0, 2].tricontourf(tri_raw, Te_raw, levels=50)
+plot_rho1(axs[0, 2])
+fig.colorbar(tpc1, ax=axs[0, 2], label="T (eV)")
+axs[0, 2].set_title("Raw edge temperature\n(ignore core values)")
 
 # Interpolated edge Te
-pcm4 = axs[1, 1].pcolormesh(RR, ZZ, Te_e2, shading="auto")
-plot_rho1(axs[1, 1])
-fig.colorbar(pcm4, ax=axs[1, 1], label=r"$T_{e,\mathrm{interp}}\;(\mathrm{eV})$")
-axs[1, 1].set_title("Interpolated edge temperature")
-axs[1, 1].set_xlabel("R")
-axs[1, 1].set_ylabel("Z")
-axs[1, 1].set_aspect("equal")
-
-# Total Te
-pcm5 = axs[1, 2].pcolormesh(RR, ZZ, Te_T, shading="auto")
+pcm3 = axs[1, 2].pcolormesh(RRi, ZZi, Te_i2, shading="auto")
 plot_rho1(axs[1, 2])
-fig.colorbar(pcm5, ax=axs[1, 2], label=r"$T_e\;(\mathrm{eV})$")
-axs[1, 2].set_title("Total temperature")
-axs[1, 2].set_xlabel("R")
-axs[1, 2].set_ylabel("Z")
-axs[1, 2].set_aspect("equal")
+fig.colorbar(pcm3, ax=axs[1, 2], label="T (eV)")
+axs[1, 2].set_title("Interpolated edge temperature")
 
-# rho again
-pcm7 = axs[1, 3].pcolormesh(RR, ZZ, rho2, shading="auto")
-plot_rho1(axs[1, 3])
-fig.colorbar(pcm7, ax=axs[1, 3], label=r"$\rho$")
-axs[1, 3].set_title("Normalized flux $\\rho$")
-axs[1, 3].set_xlabel("R")
-axs[1, 3].set_ylabel("Z")
-axs[1, 3].set_aspect("equal")
+# cosmetics
+for ax in axs.flat:
+    ax.set_xlabel("R")
+    ax.set_ylabel("Z")
+    ax.set_aspect("equal")
 
 plt.show()

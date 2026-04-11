@@ -667,3 +667,343 @@ void WriteMagneticAxis(IdsNs::IDS& ids,
     os << std::setprecision(12);
     os << R_axis << " " << Z_axis << "\n";
 }
+
+
+double WrapAngleDiff(double a, double b)
+{
+    double d = a - b;
+    while (d >  M_PI) d -= 2.0 * M_PI;
+    while (d < -M_PI) d += 2.0 * M_PI;
+    return d;
+}
+
+double ComputeTheta(double R, double Z, double R0, double Z0)
+{
+    return std::atan2(Z - Z0, R - R0);
+}
+
+EqGrid2D ExtractEqGridRho(IdsNs::IDS& ids, double time)
+{
+    ids._equilibrium.getSlice(time, CLOSEST_SAMPLE);
+
+    auto& ts0 = ids._equilibrium.time_slice(0);
+    auto& p2d = ts0.profiles_2d(0);
+
+    auto& R   = p2d.grid.dim1;
+    auto& Z   = p2d.grid.dim2;
+    auto& psi = p2d.psi;
+
+    const int iR0 = R.lbound(0);
+    const int iR1 = R.ubound(0);
+    const int iZ0 = Z.lbound(0);
+    const int iZ1 = Z.ubound(0);
+
+    const int nR = iR1 - iR0 + 1;
+    const int nZ = iZ1 - iZ0 + 1;
+
+    const double psi_axis = ts0.global_quantities.psi_axis;
+    const double psi_bnd  = ts0.global_quantities.psi_boundary;
+
+    const double denom = psi_bnd - psi_axis;
+    if (std::abs(denom) == 0.0) {
+        throw std::runtime_error("ExtractEqGridRho: invalid psi normalization");
+    }
+
+    EqGrid2D g;
+    g.nR = nR;
+    g.nZ = nZ;
+    g.Rvals.resize(nR);
+    g.Zvals.resize(nZ);
+    g.rho.resize(nR * nZ);
+
+    for (int i = 0; i < nR; ++i) {
+        g.Rvals[i] = R(i + iR0);
+    }
+    for (int j = 0; j < nZ; ++j) {
+        g.Zvals[j] = Z(j + iZ0);
+    }
+
+    for (int i = 0; i < nR; ++i) {
+        for (int j = 0; j < nZ; ++j) {
+            const int k = j * nR + i;
+            const double psi_ij = psi(i + iR0, j + iZ0);
+            const double arg = (psi_ij - psi_axis) / denom;
+            g.rho[k] = (arg >= 0.0) ? std::sqrt(arg) : -1.0;
+        }
+    }
+
+    return g;
+}
+
+int FindBracket(const std::vector<double>& x, double xq)
+{
+    if (xq < x.front() || xq > x.back()) return -1;
+    auto it = std::upper_bound(x.begin(), x.end(), xq);
+    if (it == x.begin()) return 0;
+    if (it == x.end())   return static_cast<int>(x.size()) - 2;
+    return static_cast<int>((it - x.begin()) - 1);
+}
+
+double BilinearInterpEq(const EqGrid2D& g, double Rq, double Zq)
+{
+    const int i = FindBracket(g.Rvals, Rq);
+    const int j = FindBracket(g.Zvals, Zq);
+
+    if (i < 0 || j < 0 || i >= g.nR - 1 || j >= g.nZ - 1) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+
+    const double R0 = g.Rvals[i];
+    const double R1 = g.Rvals[i + 1];
+    const double Z0 = g.Zvals[j];
+    const double Z1 = g.Zvals[j + 1];
+
+    const double tx = (Rq - R0) / (R1 - R0);
+    const double tz = (Zq - Z0) / (Z1 - Z0);
+
+    auto idx = [&](int ii, int jj) { return jj * g.nR + ii; };
+
+    const double f00 = g.rho[idx(i,     j)];
+    const double f10 = g.rho[idx(i + 1, j)];
+    const double f01 = g.rho[idx(i,     j + 1)];
+    const double f11 = g.rho[idx(i + 1, j + 1)];
+
+    return (1.0 - tx) * (1.0 - tz) * f00
+         + tx         * (1.0 - tz) * f10
+         + (1.0 - tx) * tz         * f01
+         + tx         * tz         * f11;
+}
+
+std::vector<EdgeParamPoint>
+BuildEdgeParamPoints(const std::vector<EdgeCellPoint>& edge_pts,
+                     const EqGrid2D& eq,
+                     double R0, double Z0)
+{
+    std::vector<EdgeParamPoint> out;
+    out.reserve(edge_pts.size());
+
+    for (const auto& p : edge_pts) {
+        const double rho_e = BilinearInterpEq(eq, p.R, p.Z);
+        if (!std::isfinite(rho_e)) continue;
+
+        EdgeParamPoint q;
+        q.R = p.R;
+        q.Z = p.Z;
+        q.rho = rho_e;
+        q.theta = ComputeTheta(p.R, p.Z, R0, Z0);
+        q.ne = p.ne;
+        q.Te = p.Te;
+        out.push_back(q);
+    }
+
+    return out;
+}
+
+double LocalInterpRhoTheta(double rho_q,
+                           double theta_q,
+                           const std::vector<EdgeParamPoint>& src,
+                           bool use_ne,
+                           double sigma_rho,
+                           double sigma_theta,
+                           double max_drho,
+                           double max_dtheta,
+                           double min_weight_sum = 1.0e-12)
+{
+    double num = 0.0;
+    double den = 0.0;
+
+    for (const auto& s : src) {
+        const double drho   = s.rho - rho_q;
+        const double dtheta = WrapAngleDiff(s.theta, theta_q);
+
+        if (std::abs(drho)   > max_drho)   continue;
+        if (std::abs(dtheta) > max_dtheta) continue;
+
+        const double xr = drho   / sigma_rho;
+        const double xt = dtheta / sigma_theta;
+
+        const double d2 = xr * xr + xt * xt;
+        const double w  = std::exp(-0.5 * d2);
+
+        num += w * (use_ne ? s.ne : s.Te);
+        den += w;
+    }
+
+    if (den < min_weight_sum) return 0.0;
+    return num / den;
+}
+
+std::vector<EdgeCellPoint> ExtractEdge2D(IdsNs::IDS& ids, double time)
+{
+    ids._edge_profiles.getSlice(time, CLOSEST_SAMPLE);
+
+    auto& ggd_data  = ids._edge_profiles.ggd(0);
+    auto& electrons = ggd_data.electrons;
+    auto& edens     = electrons.density;
+    auto& etemp     = electrons.temperature;
+
+    auto& grid0   = ids._edge_profiles.grid_ggd(0);
+    auto& spaces  = grid0.space;
+
+    if (spaces.extent(0) == 0) {
+        throw std::runtime_error("ExtractEdge2D: no spaces found in grid_ggd");
+    }
+
+    auto& space0  = spaces(0);
+    auto& objects = space0.objects_per_dimension;
+    auto& subsets = grid0.grid_subset;
+
+    if (objects.extent(0) < 3) {
+        throw std::runtime_error("ExtractEdge2D: objects_per_dimension does not contain nodes/faces/cells");
+    }
+
+    auto& nodes_bucket = objects(0).object;   // nodes
+    auto& cells_bucket = objects(2).object;   // cells
+
+    constexpr int cells_identifier_index = 5;
+
+    int cell_subset_slot = FindSubsetSlotByIdentifierIndex(subsets, cells_identifier_index);
+    if (cell_subset_slot < 0) {
+        throw std::runtime_error("ExtractEdge2D: could not find cells subset");
+    }
+
+    auto& cell_subset = subsets(cell_subset_slot);
+
+    int ne_entry = FindFieldEntryForSubset(edens, cells_identifier_index);
+    int Te_entry = FindFieldEntryForSubset(etemp, cells_identifier_index);
+
+    if (ne_entry < 0) {
+        throw std::runtime_error("ExtractEdge2D: could not find density field for cells subset");
+    }
+    if (Te_entry < 0) {
+        throw std::runtime_error("ExtractEdge2D: could not find temperature field for cells subset");
+    }
+
+    const int ncells = cell_subset.element.extent(0);
+
+    if (edens(ne_entry).values.extent(0) != ncells) {
+        throw std::runtime_error("ExtractEdge2D: density values size does not match cells subset size");
+    }
+    if (etemp(Te_entry).values.extent(0) != ncells) {
+        throw std::runtime_error("ExtractEdge2D: temperature values size does not match cells subset size");
+    }
+
+    std::vector<EdgeCellPoint> pts;
+    pts.reserve(ncells);
+
+    for (int k = cell_subset.element.lbound(0); k <= cell_subset.element.ubound(0); ++k) {
+        int cell_idx = cell_subset.element(k).object(0).index;
+
+        auto& cell = cells_bucket(cell_idx - 1);
+        auto& cell_nodes = cell.nodes;
+
+        if (cell_nodes.extent(0) == 0) {
+            throw std::runtime_error("ExtractEdge2D: encountered cell with no nodes");
+        }
+
+        std::set<int> unique_nodes;
+        for (int j = cell_nodes.lbound(0); j <= cell_nodes.ubound(0); ++j) {
+            unique_nodes.insert(cell_nodes(j));
+        }
+
+        double Rc = 0.0;
+        double Zc = 0.0;
+
+        for (int node_idx : unique_nodes) {
+            auto& node = nodes_bucket(node_idx - 1);
+            auto& geom = node.geometry;
+
+            if (geom.extent(0) != 2) {
+                throw std::runtime_error("ExtractEdge2D: expected node.geometry to have extent 2");
+            }
+
+            Rc += geom(0);
+            Zc += geom(1);
+        }
+
+        Rc /= static_cast<double>(unique_nodes.size());
+        Zc /= static_cast<double>(unique_nodes.size());
+
+        const double ne = edens(ne_entry).values(k);
+        const double Te = etemp(Te_entry).values(k);
+
+        pts.push_back({Rc, Zc, ne, Te});
+    }
+
+    return pts;
+}
+
+void WriteEdgeOnGridRhoTheta(IdsNs::IDS& ids,
+                             double time,
+                             const std::string& filename,
+                             double sigma_rho,
+                             double sigma_theta)
+{
+    // 1. raw edge cell centers
+    std::vector<EdgeCellPoint> edge_pts = ExtractEdge2D(ids, time);
+    if (edge_pts.empty()) {
+        throw std::runtime_error("WriteEdgeOnGridRhoTheta: no edge points extracted");
+    }
+
+    // 2. equilibrium rho grid
+    EqGrid2D eq = ExtractEqGridRho(ids, time);
+
+    // 3. magnetic axis
+    ids._equilibrium.getSlice(time, CLOSEST_SAMPLE);
+    auto& ts0 = ids._equilibrium.time_slice(0);
+
+    // Adjust names if needed in your bindings
+    const double R_axis = ts0.global_quantities.magnetic_axis.r;
+    const double Z_axis = ts0.global_quantities.magnetic_axis.z;
+
+    // 4. edge points in (rho, theta)
+    std::vector<EdgeParamPoint> src = BuildEdgeParamPoints(edge_pts, eq, R_axis, Z_axis);
+    if (src.empty()) {
+        throw std::runtime_error("WriteEdgeOnGridRhoTheta: no valid edge param points");
+    }
+
+    const double max_drho   = 3.0 * sigma_rho;
+    const double max_dtheta = 3.0 * sigma_theta;
+
+    std::ofstream out(filename);
+    if (!out) {
+        throw std::runtime_error("WriteEdgeOnGridRhoTheta: could not open output file " + filename);
+    }
+
+    out << std::setprecision(12);
+    out << "# R Z ne_edge_interp Te_edge_interp\n";
+
+    for (int i = 0; i < eq.nR; ++i) {
+        for (int j = 0; j < eq.nZ; ++j) {
+            const int k = j * eq.nR + i;
+
+            const double Rq   = eq.Rvals[i];
+            const double Zq   = eq.Zvals[j];
+            const double rhoq = eq.rho[k];
+            const double thq  = ComputeTheta(Rq, Zq, R_axis, Z_axis);
+
+            double ne_i = 0.0;
+            double Te_i = 0.0;
+
+            if (rhoq > 1.0) {
+                ne_i = LocalInterpRhoTheta(rhoq, thq, src, true,
+                                           sigma_rho, sigma_theta,
+                                           max_drho, max_dtheta);
+
+                Te_i = LocalInterpRhoTheta(rhoq, thq, src, false,
+                                           sigma_rho, sigma_theta,
+                                           max_drho, max_dtheta);
+
+                if (ne_i < 0.0) ne_i = 0.0;
+                if (Te_i < 0.0) Te_i = 0.0;
+            }
+
+            out << Rq   << " "
+                << Zq   << " "
+                << ne_i << " "
+                << Te_i << " "
+                << rhoq << " "
+                << thq << "\n";
+        }
+    }
+}

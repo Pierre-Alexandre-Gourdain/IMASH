@@ -26,6 +26,25 @@ struct EdgeCellPoint
     double Te;
 };
 
+struct EqGrid2D
+{
+    std::vector<double> Rvals;
+    std::vector<double> Zvals;
+    std::vector<double> rho;   // flattened with k = j*nR + i
+    int nR = 0;
+    int nZ = 0;
+};
+
+struct EdgeParamPoint
+{
+    double R;
+    double Z;
+    double rho;
+    double theta;
+    double ne;
+    double Te;
+};
+
 struct EdgeCut
 {
     std::string name;
@@ -48,3 +67,8 @@ void WriteWall2D(IdsNs::IDS& ids,
 void WriteMagneticAxis(IdsNs::IDS& ids,
                        double time,
                        const std::string& filename);
+void WriteEdgeOnGridRhoTheta(IdsNs::IDS& ids,
+                             double time,
+                             const std::string& filename,
+                             double sigma_rho = 0.1,
+                             double sigma_theta = 0.1);
