@@ -1,8 +1,4 @@
-Here is a **clean, technically accurate README section** you can drop into your repo. It is written for developers and physicists who want to understand exactly what IMASH does and how it fits into your workflow.
-
----
-
-# **IMASH — IMAS Access & Hydrodynamic Mapping Layer**
+# **IMAS Helper — IMAS Access & Hydrodynamic Mapping Layer**
 
 ## **Overview**
 
