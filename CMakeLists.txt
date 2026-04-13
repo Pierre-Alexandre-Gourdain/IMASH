@@ -4,6 +4,8 @@ project(IMASH LANGUAGES CXX)
 
 set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 
+option(IMASH_BUILD_EXECUTABLE "Build IMASH executable" ON)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -30,9 +32,12 @@ target_link_libraries(IMASH PUBLIC
     Threads::Threads
 )
 
-add_executable(imash
-    src/main.cpp
-)
+if(IMASH_BUILD_EXECUTABLE)
+	add_executable(imash
+		src/main.cpp
+	)
+endif()
+
 target_compile_options(IMASH PUBLIC -pthread)
 target_link_options(IMASH PUBLIC -pthread)
 target_link_libraries(imash PRIVATE IMASH)
