@@ -42,8 +42,8 @@ $$
 $$
 
 - Produces:
-  - $ n_e(R,Z) $
-  - $ T_e(R,Z) $
+  - $n_e(R,Z)$
+  - $T_e(R,Z)$
 - Uses interpolation in $\rho$
 
 ---
