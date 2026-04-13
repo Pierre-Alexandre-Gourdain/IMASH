@@ -1,6 +1,14 @@
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import argparse
+from pathlib import Path
+
+parser = argparse.ArgumentParser()
+parser.add_argument("dir", help="Directory containing IMASH output files")
+args = parser.parse_args()
+
+base = Path(args.dir).resolve()
 
 # ============================================================
 # Helpers
@@ -16,7 +24,7 @@ def plot_rho1(ax):
 # ============================================================
 # Load core data
 # ============================================================
-core = np.loadtxt("core_on_equilibrium_grid.dat", comments="#")
+core = np.loadtxt(base / "core_on_equilibrium_grid.dat", comments="#")
 Rc   = core[:, 0]
 Zc   = core[:, 1]
 rho  = core[:, 2]
@@ -38,7 +46,7 @@ RR, ZZ = np.meshgrid(Rvals, Zvals, indexing="xy")
 # ============================================================
 # Load interpolated edge data
 # ============================================================
-edge = np.loadtxt("edge_cells_2d_interpolated.dat", comments="#")
+edge = np.loadtxt(base / "edge_cells_2d_interpolated.dat", comments="#")
 
 # Expected columns:
 # R Z ne Te rho theta
@@ -75,7 +83,7 @@ Te_T[outside_sep] = Te_e2[outside_sep]
 # ============================================================
 # Load magnetic field data
 # ============================================================
-bf   = np.loadtxt("bfield.dat", comments="#")
+bf   = np.loadtxt(base / "bfield.dat", comments="#")
 Rb   = bf[:, 0]
 Zb   = bf[:, 1]
 BR   = bf[:, 2]

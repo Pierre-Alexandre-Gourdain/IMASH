@@ -1,6 +1,14 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.tri as mtri
+import argparse
+from pathlib import Path
+
+parser = argparse.ArgumentParser()
+parser.add_argument("dir", help="Directory containing IMASH output files")
+args = parser.parse_args()
+
+base = Path(args.dir).resolve()
 
 # ============================================================
 # Helpers
@@ -32,7 +40,7 @@ def plot_rho1(ax):
 # Load core / equilibrium-grid data
 # ============================================================
 
-core = np.loadtxt("core_on_equilibrium_grid.dat", comments="#")
+core = np.loadtxt(base / "core_on_equilibrium_grid.dat", comments="#")
 Rc   = core[:, 0]
 Zc   = core[:, 1]
 rho  = core[:, 2]
@@ -43,7 +51,7 @@ Rvals, Zvals, RR, ZZ, rho2 = reshape_on_grid(Rc, Zc, rho)
 # Load raw edge data
 # ============================================================
 
-edge_raw = np.loadtxt("edge_cells_2d.dat", comments="#")
+edge_raw = np.loadtxt(base / "edge_cells_2d.dat", comments="#")
 Re_raw   = edge_raw[:, 1]
 Ze_raw   = edge_raw[:, 2]
 ne_raw   = edge_raw[:, 3]
@@ -55,7 +63,7 @@ tri_raw = mtri.Triangulation(Re_raw, Ze_raw)
 # Load interpolated edge data (C++ output)
 # ============================================================
 
-edge_int = np.loadtxt("edge_cells_2d_interpolated.dat", comments="#")
+edge_int = np.loadtxt(base / "edge_cells_2d_interpolated.dat", comments="#")
 
 Ri_int     = edge_int[:, 0]
 Zi_int     = edge_int[:, 1]

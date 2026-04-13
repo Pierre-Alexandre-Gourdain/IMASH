@@ -5,6 +5,9 @@
 #include <queue>
 #include <fstream>
 #include <cmath>
+#include <iostream>
+#include <set>
+#include <limits>
 
 #include "IMASH.H"
 
@@ -986,4 +989,406 @@ void WriteEdgeOnGridRhoTheta(IdsNs::IDS& ids,
                 << thq << "\n";
         }
     }
+}
+
+MagneticAxisPoint ExtractMagneticAxis(IdsNs::IDS& ids, double time)
+{
+    ids._equilibrium.getSlice(time, PREVIOUS_SAMPLE);
+    auto& ts0 = ids._equilibrium.time_slice(0);
+
+    MagneticAxisPoint axis;
+    axis.R = ts0.global_quantities.magnetic_axis.r;
+    axis.Z = ts0.global_quantities.magnetic_axis.z;
+    return axis;
+}
+
+WallData ExtractWall2D(IdsNs::IDS& ids, double time)
+{
+    ids._wall.getSlice(time, PREVIOUS_SAMPLE);
+
+    WallData wall;
+
+    const int ndesc = static_cast<int>(ids._wall.description_2d.size());
+
+    for (int i1 = 0; i1 < ndesc; ++i1) {
+        auto& desc = ids._wall.description_2d(i1);
+
+        const int nlim = static_cast<int>(desc.limiter.unit.size());
+        for (int i2 = 0; i2 < nlim; ++i2) {
+            auto& unit = desc.limiter.unit(i2);
+            auto& r = unit.outline.r;
+            auto& z = unit.outline.z;
+
+            const int n = static_cast<int>(r.size());
+            if (n == 0) continue;
+            if (static_cast<int>(z.size()) != n) {
+                throw std::runtime_error("ExtractWall2D: limiter outline r/z size mismatch.");
+            }
+
+            PolylineRZ c("limiter");
+            for (int k = 0; k < n; ++k) {
+                c.addPoint(r(k), z(k));
+            }
+            wall.addContour(c);
+        }
+
+        const int nves = static_cast<int>(desc.vessel.unit.size());
+        for (int i2 = 0; i2 < nves; ++i2) {
+            auto& unit = desc.vessel.unit(i2);
+
+            auto& rin = unit.annular.outline_inner.r;
+            auto& zin = unit.annular.outline_inner.z;
+            const int nin = static_cast<int>(rin.size());
+            if (nin > 0) {
+                if (static_cast<int>(zin.size()) != nin) {
+                    throw std::runtime_error("ExtractWall2D: vessel inner outline r/z size mismatch.");
+                }
+
+                PolylineRZ c("vessel_inner");
+                for (int k = 0; k < nin; ++k) {
+                    c.addPoint(rin(k), zin(k));
+                }
+                wall.addContour(c);
+            }
+
+            auto& rout = unit.annular.outline_outer.r;
+            auto& zout = unit.annular.outline_outer.z;
+            const int nout = static_cast<int>(rout.size());
+            if (nout > 0) {
+                if (static_cast<int>(zout.size()) != nout) {
+                    throw std::runtime_error("ExtractWall2D: vessel outer outline r/z size mismatch.");
+                }
+
+                PolylineRZ c("vessel_outer");
+                for (int k = 0; k < nout; ++k) {
+                    c.addPoint(rout(k), zout(k));
+                }
+                wall.addContour(c);
+            }
+        }
+    }
+
+    return wall;
+}
+
+void FillCoreProfilesFromImas(IdsNs::IDS& ids,
+                              double time,
+                              PlasmaData& plasma)
+{
+    ids._core_profiles.getSlice(time, CLOSEST_SAMPLE);
+
+    auto& profiles = ids._core_profiles.profiles_1d;
+    if (profiles.extent(0) == 0) {
+        throw std::runtime_error("No core_profiles found");
+    }
+
+    auto& prof = profiles(0);
+
+    auto& rho_arr = prof.grid.rho_tor_norm;
+    auto& ne_arr  = prof.electrons.density;
+    auto& Te_arr  = prof.electrons.temperature;
+
+    std::vector<double> rho_1d, ne_1d, Te_1d;
+
+    for (int i = rho_arr.lbound(0); i <= rho_arr.ubound(0); ++i) {
+        rho_1d.push_back(rho_arr(i));
+        ne_1d.push_back(ne_arr(i));
+        Te_1d.push_back(Te_arr(i));
+    }
+
+    std::vector<std::size_t> perm(rho_1d.size());
+    for (std::size_t i = 0; i < perm.size(); ++i) perm[i] = i;
+
+    std::sort(perm.begin(), perm.end(),
+              [&](std::size_t a, std::size_t b) {
+                  return rho_1d[a] < rho_1d[b];
+              });
+
+    std::vector<double> rho, ne, Te;
+    for (auto k : perm) {
+        rho.push_back(rho_1d[k]);
+        ne.push_back(ne_1d[k]);
+        Te.push_back(Te_1d[k]);
+    }
+
+    ids._equilibrium.getSlice(time, CLOSEST_SAMPLE);
+
+    auto& ts0 = ids._equilibrium.time_slice(0);
+    auto& p2d = ts0.profiles_2d(0);
+
+    auto& R   = p2d.grid.dim1;
+    auto& Z   = p2d.grid.dim2;
+    auto& psi = p2d.psi;
+
+    const int iR0 = R.lbound(0);
+    const int iR1 = R.ubound(0);
+    const int iZ0 = Z.lbound(0);
+    const int iZ1 = Z.ubound(0);
+
+    const int nR = iR1 - iR0 + 1;
+    const int nZ = iZ1 - iZ0 + 1;
+
+    const double psi_axis = ts0.global_quantities.psi_axis;
+    const double psi_bnd  = ts0.global_quantities.psi_boundary;
+
+    const double denom = psi_bnd - psi_axis;
+    if (std::abs(denom) == 0.0) {
+        throw std::runtime_error("psi normalization invalid");
+    }
+
+    plasma.resize(nR, nZ);
+
+    for (int i = 0; i < nR; ++i) {
+        plasma.grid.Rvals[i] = R(i + iR0);
+    }
+    for (int j = 0; j < nZ; ++j) {
+        plasma.grid.Zvals[j] = Z(j + iZ0);
+    }
+
+    std::vector<double> rho_map(nR * nZ, -1.0);
+    std::vector<unsigned char> inside_candidate(nR * nZ, 0);
+    std::vector<unsigned char> boundary_connected(nR * nZ, 0);
+
+    auto idx_local = [nZ](int ii, int jj) {
+        return ii * nZ + jj;
+    };
+
+    const double rho_tol = 1.0e-10;
+
+    for (int i = 0; i < nR; ++i) {
+        for (int j = 0; j < nZ; ++j) {
+            const double psi_ij = psi(i + iR0, j + iZ0);
+            const double arg = (psi_ij - psi_axis) / denom;
+
+            double rho_ij = -1.0;
+            if (arg >= 0.0) {
+                rho_ij = std::sqrt(arg);
+            }
+
+            rho_map[idx_local(i, j)] = rho_ij;
+
+            if (rho_ij >= 0.0 && rho_ij <= 1.0 + rho_tol) {
+                inside_candidate[idx_local(i, j)] = 1;
+            }
+        }
+    }
+
+    std::queue<std::pair<int,int>> q;
+
+    auto try_push = [&](int i, int j)
+    {
+        if (i < 0 || i >= nR || j < 0 || j >= nZ) return;
+        const int k = idx_local(i, j);
+        if (!inside_candidate[k]) return;
+        if (boundary_connected[k]) return;
+        boundary_connected[k] = 1;
+        q.push({i, j});
+    };
+
+    for (int i = 0; i < nR; ++i) {
+        try_push(i, 0);
+        try_push(i, nZ - 1);
+    }
+    for (int j = 0; j < nZ; ++j) {
+        try_push(0, j);
+        try_push(nR - 1, j);
+    }
+
+    while (!q.empty()) {
+        auto [i, j] = q.front();
+        q.pop();
+
+        try_push(i - 1, j);
+        try_push(i + 1, j);
+        try_push(i, j - 1);
+        try_push(i, j + 1);
+    }
+
+    for (int i = 0; i < nR; ++i) {
+        for (int j = 0; j < nZ; ++j) {
+            const double rho_ij = rho_map[idx_local(i, j)];
+
+            plasma.rho(i, j) = rho_ij;
+
+            const bool is_candidate = inside_candidate[idx_local(i, j)] != 0;
+            const bool is_boundary_connected = boundary_connected[idx_local(i, j)] != 0;
+
+            double ne_ij = 0.0;
+            double Te_ij = 0.0;
+
+            if (is_candidate && !is_boundary_connected && rho_ij <= 1.0) {
+                ne_ij = LinearInterp1D(rho, ne, rho_ij);
+                Te_ij = LinearInterp1D(rho, Te, rho_ij);
+                plasma.core_mask(i, j) = 1.0;
+            } else {
+                plasma.core_mask(i, j) = 0.0;
+            }
+
+            plasma.ne_core(i, j) = ne_ij;
+            plasma.Te_core(i, j) = Te_ij;
+        }
+    }
+}
+
+void FillBfieldFromImas(IdsNs::IDS& ids,
+                        double time,
+                        PlasmaData& plasma)
+{
+    ids._equilibrium.getSlice(time, PREVIOUS_SAMPLE);
+    auto& ts0 = ids._equilibrium.time_slice(0);
+
+    const double BT = ids._equilibrium.vacuum_toroidal_field.b0(0);
+    const double R0 = ids._equilibrium.vacuum_toroidal_field.r0;
+    auto& p2d = ts0.profiles_2d(0);
+
+    auto& Rvec = p2d.grid.dim1;
+    auto& Zvec = p2d.grid.dim2;
+    auto& BR2D = p2d.b_field_r;
+    auto& BZ2D = p2d.b_field_z;
+
+    const int nR = static_cast<int>(Rvec.size());
+    const int nZ = static_cast<int>(Zvec.size());
+
+    if (plasma.empty()) {
+        plasma.resize(nR, nZ);
+        for (int i = 0; i < nR; ++i) plasma.grid.Rvals[i] = Rvec(i);
+        for (int j = 0; j < nZ; ++j) plasma.grid.Zvals[j] = Zvec(j);
+    }
+
+    for (int i = 0; i < nR; ++i) {
+        for (int j = 0; j < nZ; ++j) {
+            const int k = j * nR + i;
+            const double R = Rvec(i);
+
+            plasma.B.br(i, j)   = BR2D(k);
+            plasma.B.bz(i, j)   = BZ2D(k);
+            plasma.B.bphi(i, j) = BT * R0 / R;
+        }
+    }
+}
+
+void FillEdgeProfilesOnGridFromImas(IdsNs::IDS& ids,
+                                    double time,
+                                    PlasmaData& plasma,
+                                    double sigma_rho,
+                                    double sigma_theta)
+{
+    std::vector<EdgeCellPoint> edge_pts = ExtractEdge2D(ids, time);
+    if (edge_pts.empty()) {
+        throw std::runtime_error("FillEdgeProfilesOnGridFromImas: no edge points extracted");
+    }
+
+    EqGrid2D eq = ExtractEqGridRho(ids, time);
+
+    ids._equilibrium.getSlice(time, CLOSEST_SAMPLE);
+    auto& ts0 = ids._equilibrium.time_slice(0);
+
+    const double R_axis = ts0.global_quantities.magnetic_axis.r;
+    const double Z_axis = ts0.global_quantities.magnetic_axis.z;
+
+    std::vector<EdgeParamPoint> src = BuildEdgeParamPoints(edge_pts, eq, R_axis, Z_axis);
+    if (src.empty()) {
+        throw std::runtime_error("FillEdgeProfilesOnGridFromImas: no valid edge param points");
+    }
+
+    const double max_drho   = 3.0 * sigma_rho;
+    const double max_dtheta = 3.0 * sigma_theta;
+
+    if (plasma.empty()) {
+        plasma.resize(eq.nR, eq.nZ);
+        plasma.grid.Rvals = eq.Rvals;
+        plasma.grid.Zvals = eq.Zvals;
+        for (int i = 0; i < eq.nR; ++i) {
+            for (int j = 0; j < eq.nZ; ++j) {
+                plasma.rho(i, j) = eq.rho[j * eq.nR + i];
+            }
+        }
+    }
+
+    for (int i = 0; i < eq.nR; ++i) {
+        for (int j = 0; j < eq.nZ; ++j) {
+            const int k = j * eq.nR + i;
+
+            const double Rq   = eq.Rvals[i];
+            const double Zq   = eq.Zvals[j];
+            const double rhoq = eq.rho[k];
+            const double thq  = ComputeTheta(Rq, Zq, R_axis, Z_axis);
+
+            double ne_i = 0.0;
+            double Te_i = 0.0;
+
+            if (rhoq > 1.0) {
+                ne_i = LocalInterpRhoTheta(rhoq, thq, src, true,
+                                           sigma_rho, sigma_theta,
+                                           max_drho, max_dtheta);
+
+                Te_i = LocalInterpRhoTheta(rhoq, thq, src, false,
+                                           sigma_rho, sigma_theta,
+                                           max_drho, max_dtheta);
+
+                if (ne_i < 0.0) ne_i = 0.0;
+                if (Te_i < 0.0) Te_i = 0.0;
+                plasma.edge_mask(i, j) = 1.0;
+            } else {
+                plasma.edge_mask(i, j) = 0.0;
+            }
+
+            plasma.ne_edge(i, j) = ne_i;
+            plasma.Te_edge(i, j) = Te_i;
+        }
+    }
+}
+
+void MergePlasmaProfiles(PlasmaData& plasma)
+{
+    if (plasma.empty()) return;
+
+    const int nR = plasma.grid.nR;
+    const int nZ = plasma.grid.nZ;
+
+    for (int i = 0; i < nR; ++i) {
+        for (int j = 0; j < nZ; ++j) {
+            if (plasma.core_mask(i, j) > 0.5) {
+                plasma.ne(i, j) = plasma.ne_core(i, j);
+                plasma.Te(i, j) = plasma.Te_core(i, j);
+                plasma.source_mask(i, j) = 1.0;
+            } else if (plasma.edge_mask(i, j) > 0.5) {
+                plasma.ne(i, j) = plasma.ne_edge(i, j);
+                plasma.Te(i, j) = plasma.Te_edge(i, j);
+                plasma.source_mask(i, j) = 2.0;
+            } else {
+                plasma.ne(i, j) = 0.0;
+                plasma.Te(i, j) = 0.0;
+                plasma.source_mask(i, j) = 0.0;
+            }
+        }
+    }
+}
+
+PlasmaData ExtractPlasmaData(IdsNs::IDS& ids,
+                             double time,
+                             bool fill_core,
+                             bool fill_bfield,
+                             bool fill_edge_on_grid,
+                             bool merge_density,
+                             bool merge_temperature,
+                             double sigma_rho,
+                             double sigma_theta)
+{
+    PlasmaData plasma;
+
+    if (fill_core) {
+        FillCoreProfilesFromImas(ids, time, plasma);
+    }
+    if (fill_bfield) {
+        FillBfieldFromImas(ids, time, plasma);
+    }
+    if (fill_edge_on_grid) {
+        FillEdgeProfilesOnGridFromImas(ids, time, plasma, sigma_rho, sigma_theta);
+    }
+    if (merge_density || merge_temperature) {
+        MergePlasmaProfiles(plasma);
+    }
+
+    return plasma;
 }
