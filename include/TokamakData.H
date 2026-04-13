@@ -202,19 +202,6 @@ public:
 };
 
 // ============================================================
-// Edge cut container
-// ============================================================
-
-struct EdgeCut
-{
-    std::string name;
-    std::vector<EdgeCutPoint> points;
-
-    [[nodiscard]] bool empty() const noexcept { return points.empty(); }
-    [[nodiscard]] int size() const noexcept { return static_cast<int>(points.size()); }
-};
-
-// ============================================================
 // Plasma data on axisymmetric equilibrium grid
 // ============================================================
 
