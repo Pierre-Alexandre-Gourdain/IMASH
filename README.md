@@ -6,6 +6,8 @@
 
 It is designed as a **bridge layer** between IMAS and numerical solvers (e.g. AMReX-based FDTD codes), while preserving a **Python-verifiable workflow** via file outputs.
 
+![IMASH pipeline](docs/images/imas_pipeline.png)
+
 ---
 
 ## **What IMASH Does**
