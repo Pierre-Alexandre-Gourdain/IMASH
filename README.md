@@ -156,7 +156,7 @@ $$
 ### **Units**
 
 - Length: meters  
-- Density: $ \text{m}^{-3} $  
+- Density: $\text{m}^{-3}$  
 - Temperature: eV  
 - Magnetic field: Tesla  
 
