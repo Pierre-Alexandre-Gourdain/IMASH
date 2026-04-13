@@ -14,7 +14,6 @@ It is designed as a **bridge layer** between IMAS and numerical solvers (e.g. AM
 
 The executable requires the IMAS path and a simulation time (in seconds):
 
-```bash
 ./imash_test <imas_path> <time> [output_dir]
 
 ## **What IMASH Does**
