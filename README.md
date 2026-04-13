@@ -10,11 +10,21 @@ It is designed as a **bridge layer** between IMAS and numerical solvers (e.g. AM
 
 ---
 
-### Running the IMASH test executable
+## Running the IMASH test executable
 
-The executable requires the IMAS path and a simulation time (in seconds):
+The executable requires the IMAS path and a time (in seconds):
 
+```bash
 ./imash_test <imas_path> <time> [output_dir]
+```
+
+Example:
+
+```bash
+./imash_test ~/iter/134174/117/ 60.0 ./
+```
+
+This will read IMAS data at `t = 60.0 s` and write output files to the current directory.
 
 ## **What IMASH Does**
 
