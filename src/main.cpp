@@ -48,7 +48,7 @@ int main()
 {
     try {
         const std::string uri = "imas:hdf5?path=/home/pag/iter/134174/117";
-        const double time = 35.0;
+        const double time = 60.0;
 
         IdsNs::IDS ids;
         ids.open(uri, OPEN_PULSE);
