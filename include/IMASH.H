@@ -12,6 +12,7 @@
 
 int FindSubsetIndexByName(IdsNs::IDS& ids, const std::string& name);
 
+
 template <typename SubsetArray>
 int FindSubsetSlotByIdentifierIndex(const SubsetArray& subsets,
                                     int identifier_index)
@@ -61,6 +62,16 @@ double LocalInterpRhoTheta(double rho_q,
                            double max_drho,
                            double max_dtheta,
                            double min_weight_sum = 1.0e-12);
+
+// ============================================================
+// Edge-cut extraction / debug output
+// ============================================================
+
+EdgeCut ExtractEdgeCut(IdsNs::IDS& ids, int subset_index);
+
+void PrintEdgeCut(const EdgeCut& cut);
+
+void WriteEdgeCut(const EdgeCut& cut, const std::string& filename);
 
 // ============================================================
 // Structured equilibrium-grid helpers
