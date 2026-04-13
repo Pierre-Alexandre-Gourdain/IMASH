@@ -1,77 +1,81 @@
-// Include the Access Layer
 #include "ALClasses.h"
 #include "IMASH.H"
 
 #include <iostream>
-#include <vector>
-#include <fstream>
-#include <memory>
 #include <string>
-#include <typeinfo>
-#include <cstdlib>
-#include <cxxabi.h>
+#include <cstdlib>   // std::stod
+#include <filesystem>
 
-template <typename T>
-void print_type(const T&, const char* name)
-{
-    int status = 0;
-    std::unique_ptr<char, void(*)(void*)> demangled(
-        abi::__cxa_demangle(typeid(T).name(), nullptr, nullptr, &status),
-        std::free
-    );
-
-    std::cout << name << " type = "
-              << ((status == 0 && demangled) ? demangled.get() : typeid(T).name())
-              << "\n";
-}
-
-template <typename T>
-void print_subset_indices(T& subset, const std::string& name)
-{
-    std::cout << "\nSubset: " << name << "\n";
-    std::cout << "elements = " << subset.element.extent(0) << "\n";
-
-    for (int i = subset.element.lbound(0); i <= subset.element.ubound(0); ++i) {
-        auto& el = subset.element(i);
-        auto& objs = el.object;
-
-        std::cout << "  element " << i << ": ";
-        for (int j = objs.lbound(0); j <= objs.ubound(0); ++j) {
-            std::cout << "(dim=" << objs(j).dimension
-                      << ", idx=" << objs(j).index << ") ";
-        }
-        std::cout << "\n";
-    }
-}
-
-int main()
+int main(int argc, char* argv[])
 {
     try {
-        const std::string uri = "imas:hdf5?path=/home/pag/iter/134174/117";
-        const double time = 60.0;
+        // --------------------------------------------------
+        // Parse arguments
+        // --------------------------------------------------
+        if (argc < 3) {
+            std::cerr << "Usage: " << argv[0]
+                      << " <imas_path> <time> [output_dir]\n";
+            return 1;
+        }
 
+        const std::string imas_path = argv[1];
+        const double time = std::stod(argv[2]);
+
+        std::string output_dir = ".";
+        if (argc >= 4) {
+            output_dir = argv[3];
+        }
+
+        std::filesystem::create_directories(output_dir);
+
+        // --------------------------------------------------
+        // Open IMAS
+        // --------------------------------------------------
         IdsNs::IDS ids;
+
+        std::string uri = "imas:hdf5?path=" + imas_path;
         ids.open(uri, OPEN_PULSE);
 
-        WriteEdge2D(ids, time, "edge_cells_2d.dat");
-        std::cout << "Wrote edge_cells_2d.dat\n";
+        // --------------------------------------------------
+        // Core / Edge / B-field outputs
+        // --------------------------------------------------
+        {
+            std::string fname = output_dir + "/edge_cells_2d.dat";
+            WriteEdge2D(ids, time, fname);
+            std::cout << "Wrote " << fname << "\n";
+        }
 
-        WriteCore2D(ids, time, "core_on_equilibrium_grid.dat");
-        std::cout << "Wrote core_on_equilibrium_grid.dat\n";
+        {
+            std::string fname = output_dir + "/core_on_equilibrium_grid.dat";
+            WriteCore2D(ids, time, fname);
+            std::cout << "Wrote " << fname << "\n";
+        }
 
-        WriteBfield2D(ids, time, "bfield.dat");
-        std::cout << "Wrote bfield.dat\n";
+        {
+            std::string fname = output_dir + "/bfield.dat";
+            WriteBfield2D(ids, time, fname);
+            std::cout << "Wrote " << fname << "\n";
+        }
 
-        WriteEdgeOnGridRhoTheta(ids, time, "edge_cells_2d_interpolated.dat", 0.01);
-        std::cout << "Wrote edge_cells_2d_interpolated.dat\n";
+        {
+            std::string fname =
+                output_dir + "/edge_cells_2d_interpolated.dat";
+
+            WriteEdgeOnGridRhoTheta(ids, time, fname, 0.01);
+            std::cout << "Wrote " << fname << "\n";
+        }
 
         /*
-        WriteWall2D(ids, time, "wall_2d.dat");
-        std::cout << "Wrote wall_2d.dat\n";
+        {
+            std::string fname = output_dir + "/wall_2d.dat";
+            WriteWall2D(ids, time, fname);
+            std::cout << "Wrote " << fname << "\n";
+        }
         */
+
     }
     catch (const std::exception& ex) {
-        std::cerr << "Error: " << ex.what() << "\n";
+        std::cerr << "Fatal error: " << ex.what() << "\n";
         return 1;
     }
 

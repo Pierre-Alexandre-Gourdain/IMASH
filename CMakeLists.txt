@@ -30,13 +30,13 @@ target_link_libraries(IMASH PUBLIC
     Threads::Threads
 )
 
-add_executable(imash_test
+add_executable(imash
     src/main.cpp
 )
 target_compile_options(IMASH PUBLIC -pthread)
 target_link_options(IMASH PUBLIC -pthread)
-target_link_libraries(imash_test PRIVATE IMASH)
-set_target_properties(imash_test PROPERTIES
+target_link_libraries(imash PRIVATE IMASH)
+set_target_properties(imash PROPERTIES
     BUILD_RPATH "${IMASCPP_LIBRARY_DIRS}"
     INSTALL_RPATH "${IMASCPP_LIBRARY_DIRS}"
     SKIP_BUILD_RPATH FALSE

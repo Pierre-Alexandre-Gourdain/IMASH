@@ -8,6 +8,21 @@
 
 #include "IMASH.H"
 
+int FindSubsetIndexByName(IdsNs::IDS& ids, const std::string& name)
+{
+    auto& grid0 = ids._edge_profiles.grid_ggd(0);
+    auto& subsets = grid0.grid_subset;
+
+    for (int i = subsets.lbound(0); i <= subsets.ubound(0); ++i) {
+        if (subsets(i).identifier.name == name) {
+            return i;
+        }
+    }
+
+    throw std::runtime_error("Subset not found: " + name);
+}
+
+
 EdgeCut ExtractEdgeCut(IdsNs::IDS& ids, int subset_index)
 {
     auto& g      = ids._edge_profiles.ggd_fast(0);
