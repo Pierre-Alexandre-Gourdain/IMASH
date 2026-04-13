@@ -18,6 +18,7 @@ pkg_check_modules(IMASCPP REQUIRED IMPORTED_TARGET al-cpp)
 
 add_library(IMASH STATIC
     src/IMASH.cpp
+    src/TokamakData.cpp
 )
 
 target_include_directories(IMASH PUBLIC

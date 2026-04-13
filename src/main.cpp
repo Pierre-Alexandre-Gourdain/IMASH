@@ -1,17 +1,15 @@
 // Include the Access Layer
 #include "ALClasses.h"
 #include "IMASH.H"
-#include <iostream>
-#include <vector>
 
 #include <iostream>
+#include <vector>
 #include <fstream>
 #include <memory>
 #include <string>
 #include <typeinfo>
 #include <cstdlib>
 #include <cxxabi.h>
-
 
 template <typename T>
 void print_type(const T&, const char* name)
@@ -28,7 +26,8 @@ void print_type(const T&, const char* name)
 }
 
 template <typename T>
-void print_subset_indices(T& subset, const std::string& name){
+void print_subset_indices(T& subset, const std::string& name)
+{
     std::cout << "\nSubset: " << name << "\n";
     std::cout << "elements = " << subset.element.extent(0) << "\n";
 
@@ -45,49 +44,31 @@ void print_subset_indices(T& subset, const std::string& name){
     }
 }
 
-
-/* int main1()
-{
-    try {
-        IdsNs::IDS ids;
-
-        ids.open("imas:hdf5?path=/home/pag/iter/134174/117", OPEN_PULSE);
-        ids._edge_profiles.getSlice(60.0, CLOSEST_SAMPLE);
-
-        WriteEdgeCells2D(ids, "edge_cells_2d.dat");
-
-        std::cout << "Wrote edge_cells_2d.dat\n";
-    }
-    catch (const std::exception& ex) {
-        std::cerr << "Error: " << ex.what() << "\n";
-        return 1;
-    }
-
-    return 0;
-} */
-
 int main()
 {
     try {
-        IdsNs::IDS ids;
+        const std::string uri = "imas:hdf5?path=/home/pag/iter/134174/117";
+        const double time = 60.0;
 
-        ids.open("imas:hdf5?path=/home/pag/iter/134174/117", OPEN_PULSE);
-		
-        WriteEdge2D(ids, 60.0, "edge_cells_2d.dat");
+        IdsNs::IDS ids;
+        ids.open(uri, OPEN_PULSE);
+
+        WriteEdge2D(ids, time, "edge_cells_2d.dat");
         std::cout << "Wrote edge_cells_2d.dat\n";
-		
-        WriteCore2D(ids, 60.0,"core_on_equilibrium_grid.dat");
+
+        WriteCore2D(ids, time, "core_on_equilibrium_grid.dat");
         std::cout << "Wrote core_on_equilibrium_grid.dat\n";
-		
-		WriteBfield2D(ids, 60.0, "bfield.dat");
+
+        WriteBfield2D(ids, time, "bfield.dat");
         std::cout << "Wrote bfield.dat\n";
-		
-		WriteEdgeOnGridRhoTheta(ids, 60.0, "edge_cells_2d_interpolated.dat",.01);
+
+        WriteEdgeOnGridRhoTheta(ids, time, "edge_cells_2d_interpolated.dat", 0.01);
         std::cout << "Wrote edge_cells_2d_interpolated.dat\n";
-		
-		/*WriteWall2D(ids, 60.0, "wall_2d.dat"); //needs testing
-        std::cout << "Wrote wall_2d.dat\n"; */
-		
+
+        /*
+        WriteWall2D(ids, time, "wall_2d.dat");
+        std::cout << "Wrote wall_2d.dat\n";
+        */
     }
     catch (const std::exception& ex) {
         std::cerr << "Error: " << ex.what() << "\n";
