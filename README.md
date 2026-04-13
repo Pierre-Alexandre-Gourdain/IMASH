@@ -37,14 +37,14 @@ IMAS data is not directly solver-ready. IMASH reconstructs physical fields:
 
 Maps 1D profiles → 2D equilibrium grid:
 
-\[
+$$
 \rho(R,Z) = \sqrt{\frac{\psi(R,Z)-\psi_{\text{axis}}}{\psi_{\text{bnd}}-\psi_{\text{axis}}}}
-\]
+$$
 
 - Produces:
-  - \( n_e(R,Z) \)
-  - \( T_e(R,Z) \)
-- Uses interpolation in \(\rho\)
+  - $ n_e(R,Z) $
+  - $ T_e(R,Z) $
+- Uses interpolation in $\rho$
 
 ---
 
@@ -52,11 +52,11 @@ Maps 1D profiles → 2D equilibrium grid:
 
 - Extracts cell-centered data from GGD mesh
 - Reconstructs:
-  - \( (R,Z) \) from node geometry
-  - \( n_e, T_e \) from field values
+  - $ (R,Z) $ from node geometry
+  - $ n_e, T_e $ from field values
 
 Optional:
-- Projection to equilibrium grid via \((\rho,\theta)\)
+- Projection to equilibrium grid via $(\rho,\theta)$
 
 ---
 
@@ -64,16 +64,16 @@ Optional:
 
 From equilibrium:
 
-- \( B_R(R,Z) \)
-- \( B_Z(R,Z) \)
-- \( B_\phi = B_T \frac{R_0}{R} \)
+- $ B_R(R,Z) $
+- $ B_Z(R,Z) $
+- $ B_\phi = B_T \frac{R_0}{R} $
 
 ---
 
 #### **Wall geometry**
 
 - Extracts limiter and vessel contours
-- Produces polylines in \((R,Z)\)
+- Produces polylines in $(R,Z)$
 
 ---
 
@@ -136,12 +136,12 @@ PlasmaData plasma = ExtractPlasmaData(ids, time);
 
 Flattening convention:
 
-\[
+$$
 k = j \cdot n_R + i
-\]
+$$
 
-- \(i\): radial index  
-- \(j\): vertical index  
+- $i$: radial index  
+- $j$: vertical index  
 
 ---
 
@@ -156,7 +156,7 @@ k = j \cdot n_R + i
 ### **Units**
 
 - Length: meters  
-- Density: \( \text{m}^{-3} \)  
+- Density: $ \text{m}^{-3} $  
 - Temperature: eV  
 - Magnetic field: Tesla  
 
@@ -206,7 +206,7 @@ FillMultiFabFromPlasma(plasma, ...);
 
 - ✅ Core profile mapping  
 - ✅ Edge GGD reconstruction  
-- ✅ Edge → grid interpolation (\(\rho,\theta\))  
+- ✅ Edge → grid interpolation ($\rho,\theta$)  
 - ✅ Magnetic field extraction  
 - ✅ Wall geometry extraction  
 - ✅ Python-compatible outputs  
