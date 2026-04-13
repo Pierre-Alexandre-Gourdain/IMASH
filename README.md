@@ -52,8 +52,8 @@ $$
 
 - Extracts cell-centered data from GGD mesh
 - Reconstructs:
-  - $ (R,Z) $ from node geometry
-  - $ n_e, T_e $ from field values
+  - $(R,Z)$ from node geometry
+  - $n_e, T_e$ from field values
 
 Optional:
 - Projection to equilibrium grid via $(\rho,\theta)$
@@ -64,9 +64,9 @@ Optional:
 
 From equilibrium:
 
-- $ B_R(R,Z) $
-- $ B_Z(R,Z) $
-- $ B_\phi = B_T \frac{R_0}{R} $
+- $B_R(R,Z)$
+- $B_Z(R,Z)$
+- $B_\phi = B_T \frac{R_0}{R}$
 
 ---
 
