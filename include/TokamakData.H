@@ -134,8 +134,6 @@ public:
 
 // ============================================================
 // Legacy-compatible equilibrium-grid container
-// This is kept because you already use EqGrid2D in your code.
-// Eventually PlasmaData::grid + PlasmaData::rho can replace it.
 // ============================================================
 
 struct EqGrid2D
