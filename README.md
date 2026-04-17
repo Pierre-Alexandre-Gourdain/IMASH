@@ -218,7 +218,7 @@ FillMultiFabFromPlasma(plasma, ...);
   - GPU transfer  
   - time stepping
  
-The key step takes place in the reader functions which will connect the data used by the solver and the data owned by IMAS. The reader functions must be designed in a way where **IMASH.H is present only in the private part of the code**, i.e. the ```cpp``` file. The public part where the function headers reside, the ```H``` file, should only have TokamakData.H.
+The key step takes place in the reader functions which will connect the data used by the solver and the data owned by IMAS. The reader functions must be designed in a way where **IMASH.H is present only in the private part of the code**, i.e. the ```cpp``` file. The public part where the function headers reside, the ```H``` file, should only have TokamakData.H. The ```H``` and ```cpp``` file should have no headers requiring accelerator compile or the problem will still exists. The isolation must be compile and only pure C++ functions must be used in the reader functions.
 
 ---
 
