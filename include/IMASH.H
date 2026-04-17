@@ -138,15 +138,6 @@ PlasmaData ExtractPlasmaData(IdsNs::IDS& ids,
 
 WallData ExtractWall2D(IdsNs::IDS& ids, double time);
 
-// ============================================================
-// Magnetic-axis helper
-// ============================================================
-
-struct MagneticAxisPoint
-{
-    double R = 0.0;
-    double Z = 0.0;
-};
 
 MagneticAxisPoint ExtractMagneticAxis(IdsNs::IDS& ids, double time);
 
