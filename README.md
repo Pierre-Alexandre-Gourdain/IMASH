@@ -216,7 +216,9 @@ FillMultiFabFromPlasma(plasma, ...);
 - Solver handles:
   - domain decomposition  
   - GPU transfer  
-  - time stepping  
+  - time stepping
+ 
+**The key step takes place in the reader functions which will connect the data used by the solver and the data owned by IMAS. The reader functions must be designed in a way where the IMASH.H is only present i nthe private part of the code, i.e. the cpp file. The public part, whre the function headers reside should only have TokamakData.H.**
 
 ---
 
