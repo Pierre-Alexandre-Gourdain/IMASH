@@ -2,7 +2,7 @@
 
 ## **Overview**
 
-**IMASH** is a lightweight C++ library that extracts plasma and machine data from IMAS (Integrated Modelling & Analysis Suite) and maps it into solver-ready data structures.
+**IMASH** is a lightweight C++ library that extracts plasma and machine data from IMAS (Integrated Modelling & Analysis Suite) and maps it into solver-ready data structures. The actual C++ wrapper ![IMAS-Cpp](https://github.com/iterorganization/IMAS-Cpp) tends to increase the compile time when used in conjunction with accelerator compilers (e.g. nvcc). This library completely isolates the IMAS structure from the accelerator compilers. 
 
 It is designed as a **bridge layer** between IMAS and numerical solvers (e.g. AMReX-based FDTD codes), while preserving a **Python-verifiable workflow** via file outputs.
 

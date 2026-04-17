@@ -143,7 +143,6 @@ MagneticAxisPoint ExtractMagneticAxis(IdsNs::IDS& ids, double time);
 
 // ============================================================
 // Debug / Python-friendly writers from data structures
-// These preserve your file-based verification workflow
 // ============================================================
 
 void WriteCore2D(const PlasmaData& plasma,
@@ -166,7 +165,6 @@ void WriteEdgeOnGridRhoTheta(const PlasmaData& plasma,
 
 // ============================================================
 // Backward-compatible wrappers
-// These keep the current "read IMAS + write file" workflow alive
 // ============================================================
 
 void WriteCore2D(IdsNs::IDS& ids,
