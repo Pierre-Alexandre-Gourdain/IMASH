@@ -1,4 +1,4 @@
-# **IMASHelper — IMAS Access & Hydrodynamic Mapping Layer**
+# **IMASHelper — IMAS Access & MHD Mapping Layer**
 
 ## **Overview**
 
