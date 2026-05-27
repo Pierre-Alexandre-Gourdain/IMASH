@@ -38,7 +38,8 @@ add_library(IMASH STATIC
 )
 
 target_include_directories(IMASH PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
 )
 
 target_link_libraries(IMASH PUBLIC
@@ -78,3 +79,37 @@ message(STATUS "IMASCPP_LIBRARY_DIRS = ${IMASCPP_LIBRARY_DIRS}")
 message(STATUS "IMASCPP_LIBRARIES    = ${IMASCPP_LIBRARIES}")
 message(STATUS "IMASH_BUILD_EXECUTABLE = ${IMASH_BUILD_EXECUTABLE}")
 message(STATUS "---------------------------------------------")
+# ------------------------------------------------------------
+# Install + CMake package export (added for EasyBuild packaging)
+# ------------------------------------------------------------
+include(GNUInstallDirs)
+
+install(TARGETS IMASH
+    EXPORT IMASHTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+
+install(DIRECTORY include/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+install(EXPORT IMASHTargets
+    FILE IMASHTargets.cmake
+    NAMESPACE IMASH::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/IMASH
+)
+
+# Hand-written package config: re-resolves IMAS-Cpp via pkg-config on the consumer side,
+# since the exported target depends on PkgConfig::IMASCPP which must be re-created.
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/IMASHConfig.cmake"
+"include(CMakeFindDependencyMacro)
+find_dependency(PkgConfig)
+find_dependency(Threads)
+pkg_check_modules(IMASCPP REQUIRED IMPORTED_TARGET al-cpp)
+include(\"\${CMAKE_CURRENT_LIST_DIR}/IMASHTargets.cmake\")
+")
+
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/IMASHConfig.cmake"
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/IMASH
+)
