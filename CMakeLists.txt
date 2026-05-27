@@ -22,11 +22,9 @@ option(IMASH_BUILD_EXECUTABLE "Build IMASH test executable" ON)
 find_package(PkgConfig REQUIRED)
 find_package(Threads REQUIRED)
 
-# IMAS-Cpp pkg-config path (adjust if needed)
-set(ENV{PKG_CONFIG_PATH}
-    "$ENV{HOME}/IMAS-Cpp/installdir/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}"
-)
-
+# Look up IMAS-Cpp via pkg-config. PKG_CONFIG_PATH must already point at the
+# directory containing al-cpp.pc (e.g. via an environment module, or set
+# manually before invoking cmake).
 pkg_check_modules(IMASCPP REQUIRED IMPORTED_TARGET al-cpp)
 
 # ------------------------------------------------------------
